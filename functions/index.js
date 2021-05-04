@@ -45,6 +45,42 @@ app.get('/up', async (request, response) => {
 	response.send(`I'm alive running version ${appVersion}`);
 });
 
+// Confirms that configuration values can be loaded and that api keys can auth to ByBit
+app.get('/config/validate', async (request, response) => {
+
+	try {
+		functions.config().bybit
+	} catch(e) {
+		response.status(500);
+		response.send(`Error bybit config key not set`);
+		return;
+	}
+
+	if (functions.config().bybit.api_key === undefined) {
+		response.status(500);
+		response.send(`Error bybit.api_key config key not set`);
+		return;
+	}
+
+	if (functions.config().bybit.secret_key === undefined) {
+		response.status(500);
+		response.send(`Error bybit.secret_key config key not set`);
+		return;
+	}
+
+	if (functions.config().auth_key === undefined) {
+		response.status(500);
+		response.send(`Error auth_key config key not set`);
+		return;
+	}
+
+	response.status(200);
+	response.send(`Config validation successful`);
+
+	// TODO  add bybit connection
+
+});
+
 app.post('/', async (request, response) => {
 
 	let signalDetails = null;
