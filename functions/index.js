@@ -91,12 +91,6 @@ exports.scalper = functions.region('europe-west1').https.onRequest(async (reques
 			response.status(500).send("interval is undefined");
 			return;
 		}
-		//
-		// Property modifier "small" and "big" types
-		//
-		//const takeProfitPercentage = signalDetails.prop === "big" ? TAKE_PROFIT_PERCENTAGE_BIG : TAKE_PROFIT_PERCENTAGE_SMALL;
-
-		//functions.logger.info(`${appVersion} Signal: ${JSON.stringify(signalDetails)}`);
 
 		QTY = 0;
 		CONTRACTS = 0;
@@ -194,7 +188,7 @@ async function CancelAll(client, data)
 
 async function GetCurrentPosition(client, data)
 {
-	return await client.getPositions(data).then((positionsResponse) =>
+	return await client.getPosition(data).then((positionsResponse) =>
 	{
 		//console.log(`${appVersion} GetCurrentPosition::getPositions ${JSON.stringify(positionsResponse)}`);
 		let currentPosition = null;
