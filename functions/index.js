@@ -1,11 +1,13 @@
 const functions = require("firebase-functions");
 const { RestClient } = require("bybit-api");
-const cors = require("cors")({ origin: true });
 const admin = require('firebase-admin');
 
 admin.initializeApp({
 	credential: admin.credential.applicationDefault(),
 });
+
+const express = require('express');
+const app = express();
 
 //
 // TODO: this might be better in the webhook so it's totally dynamic? I feel it's better here and more safe...
@@ -34,90 +36,79 @@ const BOT1_CONTRACTS = 1000;
 const BOT2_LEVERAGE = 5;
 const BOT2_CONTRACTS = 1000;
 
+exports.scalper = functions.region('europe-west1').https.onRequest(app);
 
-exports.scalper = functions.region('europe-west1').https.onRequest(async (request, response) =>
-{
-	return cors(request, response, async () =>
-	{
-		//
-		// Alert
-		//
-		let signalDetails = null;
-		try
-		{
-			if (request.accepts("application/json"))
-			{
-				signalDetails = request.body;
-			}
-			else
-			{
-				signalDetails = JSON.parse(request.body);
-			}
-		}
-		catch (err)
-		{
-			functions.logger.error(`${appVersion} ${err}`);
-			response.status(500);
-			response.send(`Error: ${err}`);
-			return;
-		}
-		functions.logger.info(JSON.stringify(signalDetails));
-		//
-		// Interval check
-		//
-		if (!signalDetails.interval)
-		{
-			functions.logger.error(`${appVersion} malformed JSON? ${request.accepts("application/json")} ${signalDetails} ${request.body}`);
-			response.status(500).send(`${appVersion} Error: malformed JSON?`);
-			return;
-		}
-		if (!signalDetails.bot)
-		{
-			functions.logger.error(`${appVersion} There's no bot assigned ${signalDetails}`);
-			response.status(500).send(`${appVersion} There's no bot assigned ${signalDetails}`);
-			return;
-		}
-		if (!signalDetails.prop)
-		{
-			functions.logger.error(`${appVersion} There's no prop assigned ${signalDetails}`);
-			response.status(500).send(`${appVersion} There's no prop assigned ${signalDetails}`);
-			return;
-		}
-		//
-		// Strategy
-		//
-		if (signalDetails.interval === undefined)
-		{
-			response.status(500).send("interval is undefined");
-			return;
-		}
+// Basic up endpoint to that returns a 200 and api version
+// Useful for debugging / monitoring
+app.get('/up', async (request, response) => {
+	response.status(200);
+	response.send(`I'm alive running version ${appVersion}`);
+});
 
-		QTY = 0;
-		CONTRACTS = 0;
-		LEVERAGE = 0;
+app.post('/', async (request, response) => {
 
-		if (signalDetails.bot === 1)
-		{
-			CONTRACTS = BOT1_CONTRACTS;
-			LEVERAGE = BOT1_LEVERAGE;
-			QTY = CONTRACTS * LEVERAGE;
+	let signalDetails = null;
+
+	try {
+		if (request.accepts("application/json")) {
+			signalDetails = request.body;
+		} else {
+			signalDetails = JSON.parse(request.body);
 		}
-		else if (signalDetails.bot === 2)
-		{
-			CONTRACTS = BOT2_CONTRACTS;
-			LEVERAGE = BOT2_LEVERAGE;
-			QTY = CONTRACTS * LEVERAGE;
-		}
-		else
-		{
-			functions.logger.error(`${appVersion} Bot ${signalDetails.bot} configuration not found`);
-			response.status(500).send(`${appVersion} Bot ${signalDetails.bot} configuration not found`);
-			return;
-		}
-		//
-		// Next Order
-		//
-		const orderDetails =
+	} catch (err) {
+		functions.logger.error(`${appVersion} ${err}`);
+		response.status(500);
+		response.send(`Error: ${err}`);
+		return;
+	}
+	functions.logger.info(JSON.stringify(signalDetails));
+	//
+	// Interval check
+	//
+	if (!signalDetails.interval) {
+		functions.logger.error(`${appVersion} malformed JSON? ${request.accepts("application/json")} ${signalDetails} ${request.body}`);
+		response.status(500).send(`${appVersion} Error: malformed JSON?`);
+		return;
+	}
+	if (!signalDetails.bot) {
+		functions.logger.error(`${appVersion} There's no bot assigned ${signalDetails}`);
+		response.status(500).send(`${appVersion} There's no bot assigned ${signalDetails}`);
+		return;
+	}
+	if (!signalDetails.prop) {
+		functions.logger.error(`${appVersion} There's no prop assigned ${signalDetails}`);
+		response.status(500).send(`${appVersion} There's no prop assigned ${signalDetails}`);
+		return;
+	}
+	//
+	// Strategy
+	//
+	if (signalDetails.interval === undefined) {
+		response.status(500).send("interval is undefined");
+		return;
+	}
+
+	QTY = 0;
+	CONTRACTS = 0;
+	LEVERAGE = 0;
+
+	if (signalDetails.bot === 1) {
+		CONTRACTS = BOT1_CONTRACTS;
+		LEVERAGE = BOT1_LEVERAGE;
+		QTY = CONTRACTS * LEVERAGE;
+	} else if (signalDetails.bot === 2) {
+		CONTRACTS = BOT2_CONTRACTS;
+		LEVERAGE = BOT2_LEVERAGE;
+		QTY = CONTRACTS * LEVERAGE;
+	} else {
+		functions.logger.error(`${appVersion} Bot ${signalDetails.bot} configuration not found`);
+		response.status(500).send(`${appVersion} Bot ${signalDetails.bot} configuration not found`);
+		return;
+	}
+	//
+	// Next Order
+	//
+	const orderDetails =
 		{
 			side: signalDetails.order === "buy" ? "Buy" : "Sell",	// tradingview strategy fix for bybit
 			symbol: signalDetails.stock,
@@ -126,35 +117,36 @@ exports.scalper = functions.region('europe-west1').https.onRequest(async (reques
 			qty: QTY,
 		};
 
-		const client = GetClient(signalDetails);
-		//
-		// Strategy
-		//
-		if (signalDetails.order === "buy")
-		{
-			cancelSameSideOrders = true;
-			closePreviousPosition = true;
-			functions.logger.info(`${appVersion} OPEN TRADE ACTION: ${signalDetails.stock}`);
-			await createOrder({ response: response, signalDetails: signalDetails, client: client, orderDetails: orderDetails });
-		}
+	const client = GetClient(signalDetails);
+	//
+	// Strategy
+	//
+	if (signalDetails.order === "buy") {
+		cancelSameSideOrders = true;
+		closePreviousPosition = true;
+		functions.logger.info(`${appVersion} OPEN TRADE ACTION: ${signalDetails.stock}`);
+		await createOrder({
+			response: response,
+			signalDetails: signalDetails,
+			client: client,
+			orderDetails: orderDetails
+		});
+	}
 		//
 		// Close order
-		//
-		else if (signalDetails.order === "sell")
-		{
-			functions.logger.info(`${appVersion} CLOSE TRADE ACTION: ${signalDetails.stock}`);
-			await StopOrder({ response: response, client: client, signalDetails: signalDetails });
-		}
+	//
+	else if (signalDetails.order === "sell") {
+		functions.logger.info(`${appVersion} CLOSE TRADE ACTION: ${signalDetails.stock}`);
+		await StopOrder({response: response, client: client, signalDetails: signalDetails});
+	}
 		//
 		// Bad conditions
-		//
-		else
-		{
-			const returnTxt = `${appVersion} Discarded action on interval: ${signalDetails.interval}`;
-			functions.logger.info(returnTxt);
-			response.status(200).send(returnTxt);
-		}
-	});
+	//
+	else {
+		const returnTxt = `${appVersion} Discarded action on interval: ${signalDetails.interval}`;
+		functions.logger.info(returnTxt);
+		response.status(200).send(returnTxt);
+	}
 });
 
 async function CancelAll(client, data)
