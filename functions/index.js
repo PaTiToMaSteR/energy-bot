@@ -114,8 +114,7 @@ app.post('/', async (request, response) => {
 	}
 	functions.logger.info(JSON.stringify(signalDetails));
 
-	if (!await ValidateRequestBody({response, signalDetails}))
-		return;
+	if (!await ValidateRequestBody({response, signalDetails})) return;
 
 	//
 	// Next Order
@@ -129,8 +128,7 @@ app.post('/', async (request, response) => {
 			qty: signalDetails.contracts,
 		};
 
-	const client = GetByBitClient(signalDetails.bot, response);
-	if (!client) return;
+	if (!GetByBitClient(signalDetails.bot, response)) return;
 
 	//
 	// Strategy
@@ -175,13 +173,14 @@ async function ValidateRequestBody({ response, signalDetails}) {
 
 	// Check that all required parameters are in request body
 	const body_parameters = ['bot', 'order', 'stock', 'contracts', 'leverage']
-	body_parameters.forEach((parameter) => {
+
+	for(const parameter of body_parameters) {
 		if (!signalDetails[parameter]) {
 			functions.logger.error(`${appVersion} Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`);
 			response.status(400).send(`${appVersion} Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`);
 			return false;
 		}
-	});
+	}
 
 	return true;
 }
