@@ -77,7 +77,7 @@ app.get('/config/validate', async (request, response) => {
 	response.status(200);
 	response.send(`Config validation successful`);
 
-	// TODO  add bybit connection
+	// TODO  add bybit connection test
 
 });
 
@@ -98,6 +98,15 @@ app.post('/', async (request, response) => {
 		return;
 	}
 	functions.logger.info(JSON.stringify(signalDetails));
+
+	// TradingView does not support custom request headers adding basic auth key to request body to give some basic
+	// security to the api
+	if (signalDetails.auth_key !== functions.config().auth_key) {
+		functions.logger.error(`${appVersion} Error: auth_key in request body not valid`);
+		response.status(403).send(`${appVersion} Error: unauthorized`);
+		return;
+	}
+
 	//
 	// Interval check
 	//
