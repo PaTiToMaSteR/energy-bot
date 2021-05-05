@@ -51,33 +51,48 @@ app.get('/config/validate', async (request, response) => {
 	try {
 		functions.config().bybit
 	} catch(e) {
-		response.status(500);
-		response.send(`Error bybit config key not set`);
+		response.send(`Error bybit config key not set`).status(500);
 		return;
 	}
 
 	if (functions.config().bybit.api_key === undefined) {
-		response.status(500);
-		response.send(`Error bybit.api_key config key not set`);
+		response.send(`Error bybit.api_key config key not set`).status(500);
 		return;
 	}
 
 	if (functions.config().bybit.secret_key === undefined) {
-		response.status(500);
-		response.send(`Error bybit.secret_key config key not set`);
+		response.send(`Error bybit.secret_key config key not set`).status(500);
 		return;
 	}
 
 	if (functions.config().auth_key === undefined) {
-		response.status(500);
-		response.send(`Error auth_key config key not set`);
+		response.send(`Error auth_key config key not set`).status(500);
 		return;
 	}
 
-	response.status(200);
-	response.send(`Config validation successful`);
+	// TODO make this support unlimited bots based on api keys
 
-	// TODO  add bybit connection test
+	// Test that api key can connect to bybit api
+	const client = new RestClient(functions.config().bybit.api_key, functions.config().bybit.secret_key);
+	functions.logger.info(`${functions.config().bybit.api_key} ${functions.config().bybit.secret_key}`)
+
+	await client.getApiKeyInfo().then((apiKeyInfoResponse) =>
+	{
+		//console.log(`${appVersion} ClosePreviousPosition: closeActiveOrderResponse ${JSON.stringify(closeActiveOrderResponse)}`);
+		if (apiKeyInfoResponse.ret_code !== 0 ) {
+			apiKeyInfoResponse.ret_msg
+
+			response.send(`Error could not connect to bybit ${apiKeyInfoResponse.ret_msg}`).status(500)
+		} else {
+			response.send(`Config validation successful`).status(200)
+		}
+
+		//functions.logger.info(`${appVersion} ClosePreviousPosition: ${closeActiveOrderResponse.symbol} ${closeActiveOrderResponse.side} ${closeActiveOrderResponse.price} ${closeActiveOrderResponse.qty}`)
+	}).catch((err) =>
+	{
+		//functions.logger.error(`${appVersion} ClosePreviousPosition: placeActiveOrder Error: ${err}`)
+		response.send(err).status(500)
+	});
 
 });
 
