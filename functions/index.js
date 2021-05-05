@@ -9,90 +9,90 @@ admin.initializeApp({
 const express = require('express');
 const app = express();
 
-//
-// TODO: this might be better in the webhook so it's totally dynamic? I feel it's better here and more safe...
-//
-const appVersion = "1.0.4.1";
-const API_KEY_BOT_01 = "short-numbers";
-const PRIVATE_KEY_BOT_01 = "long-numbers";
-const API_KEY_BOT_02 = "short-number";
-const PRIVATE_KEY_BOT_02 = "long-numbers";
-
-function GetClient(signalDetails)
-{
-	const API_KEY = signalDetails.bot === 1 ? API_KEY_BOT_01 : API_KEY_BOT_02;
-	const PRIVATE_KEY = signalDetails.bot === 1 ? PRIVATE_KEY_BOT_01 : PRIVATE_KEY_BOT_02;
-	const client = new RestClient(API_KEY, PRIVATE_KEY);
-
-	return client;
-}
+const appVersion = "1.0.4.2";
 
 let cancelSameSideOrders = false;
 let closePreviousPosition = true;
 
-const BOT1_LEVERAGE = 1;
-const BOT1_CONTRACTS = 1000;
+function GetByBitClient(bot_number, response)
+{
+    // Use api and secret key for bot number passed in
+    const config = functions.config();
+    let bot_config_name = 'bot_' + bot_number;
 
-const BOT2_LEVERAGE = 5;
-const BOT2_CONTRACTS = 1000;
+    if (!config[bot_config_name]) {
+        response.send(`bot ${bot_number} not found in config`).status(400)
+        return false;
+    }
+    return new RestClient(config[bot_config_name]['api_key'], config[bot_config_name]['secret_key']);
+}
 
 exports.scalper = functions.region('europe-west1').https.onRequest(app);
 
 // Basic up endpoint to that returns a 200 and api version
 // Useful for debugging / monitoring
 app.get('/up', async (request, response) => {
-	response.status(200);
-	response.send(`I'm alive running version ${appVersion}`);
+	response.send(`I'm alive running version ${appVersion}`).status(200);
 });
 
 // Confirms that configuration values can be loaded and that api keys can auth to ByBit
 app.get('/config/validate', async (request, response) => {
 
-	try {
-		functions.config().bybit
-	} catch(e) {
-		response.send(`Error bybit config key not set`).status(500);
+	const config = functions.config();
+
+    if (config.auth_key === undefined) {
+        response.send(`Error auth_key config key not set`).status(500);
+        return;
+    }
+
+	if (config.bot_1 === undefined) {
+		response.send(`Error bot_1 config key not set at least one bot must be configured`).status(500);
 		return;
 	}
 
-	if (functions.config().bybit.api_key === undefined) {
-		response.send(`Error bybit.api_key config key not set`).status(500);
-		return;
-	}
 
-	if (functions.config().bybit.secret_key === undefined) {
-		response.send(`Error bybit.secret_key config key not set`).status(500);
-		return;
-	}
+    // Test that each bot has api keys can connect to bybit looping through all config keys for bot_i
+    let i = 1;
+	let loop = true;
+    while (loop) {
 
-	if (functions.config().auth_key === undefined) {
-		response.send(`Error auth_key config key not set`).status(500);
-		return;
-	}
+        let bot_number = 'bot_' + i
 
-	// TODO make this support unlimited bots based on api keys
+        // If bot number doesn't exist break we are done
+        if (!config[bot_number]) {
+            break
+        }
 
-	// Test that api key can connect to bybit api
-	const client = new RestClient(functions.config().bybit.api_key, functions.config().bybit.secret_key);
-	functions.logger.info(`${functions.config().bybit.api_key} ${functions.config().bybit.secret_key}`)
+        if (config[bot_number]['api_key'] === undefined) {
+            response.send(`Error ${bot_number} api key not set`).status(500);
+            return;
+        }
 
-	await client.getApiKeyInfo().then((apiKeyInfoResponse) =>
-	{
-		//console.log(`${appVersion} ClosePreviousPosition: closeActiveOrderResponse ${JSON.stringify(closeActiveOrderResponse)}`);
-		if (apiKeyInfoResponse.ret_code !== 0 ) {
-			apiKeyInfoResponse.ret_msg
+        if (config[bot_number]['secret_key'] === undefined) {
+            response.send(`Error ${bot_number} secret key not set`).status(500);
+            return;
+        }
 
-			response.send(`Error could not connect to bybit ${apiKeyInfoResponse.ret_msg}`).status(500)
-		} else {
-			response.send(`Config validation successful`).status(200)
-		}
+        let client = new RestClient(config[bot_number]['api_key'], config[bot_number]['secret_key']);
 
-		//functions.logger.info(`${appVersion} ClosePreviousPosition: ${closeActiveOrderResponse.symbol} ${closeActiveOrderResponse.side} ${closeActiveOrderResponse.price} ${closeActiveOrderResponse.qty}`)
-	}).catch((err) =>
-	{
-		//functions.logger.error(`${appVersion} ClosePreviousPosition: placeActiveOrder Error: ${err}`)
-		response.send(err).status(500)
-	});
+        client.getApiKeyInfo().then((apiKeyInfoResponse) =>
+        {
+            if (apiKeyInfoResponse.ret_code !== 0 ) {
+                apiKeyInfoResponse.ret_msg
+                response.send(`Error could not connect to bybit ${apiKeyInfoResponse.ret_msg}`).status(500)
+
+            } else {
+                response.send(`Config validation successful`).status(200)
+            }
+            return;
+
+        }).catch((err) =>
+        {
+            response.send(err).status(500)
+        });
+
+        i++
+    }
 
 });
 
@@ -114,57 +114,9 @@ app.post('/', async (request, response) => {
 	}
 	functions.logger.info(JSON.stringify(signalDetails));
 
-	// TradingView does not support custom request headers adding basic auth key to request body to give some basic
-	// security to the api
-	if (signalDetails.auth_key !== functions.config().auth_key) {
-		functions.logger.error(`${appVersion} Error: auth_key in request body not valid`);
-		response.status(403).send(`${appVersion} Error: unauthorized`);
+	if (!await ValidateRequestBody({response, signalDetails}))
 		return;
-	}
 
-	//
-	// Interval check
-	//
-	if (!signalDetails.interval) {
-		functions.logger.error(`${appVersion} malformed JSON? ${request.accepts("application/json")} ${signalDetails} ${request.body}`);
-		response.status(500).send(`${appVersion} Error: malformed JSON?`);
-		return;
-	}
-	if (!signalDetails.bot) {
-		functions.logger.error(`${appVersion} There's no bot assigned ${signalDetails}`);
-		response.status(500).send(`${appVersion} There's no bot assigned ${signalDetails}`);
-		return;
-	}
-	if (!signalDetails.prop) {
-		functions.logger.error(`${appVersion} There's no prop assigned ${signalDetails}`);
-		response.status(500).send(`${appVersion} There's no prop assigned ${signalDetails}`);
-		return;
-	}
-	//
-	// Strategy
-	//
-	if (signalDetails.interval === undefined) {
-		response.status(500).send("interval is undefined");
-		return;
-	}
-
-	QTY = 0;
-	CONTRACTS = 0;
-	LEVERAGE = 0;
-
-	if (signalDetails.bot === 1) {
-		CONTRACTS = BOT1_CONTRACTS;
-		LEVERAGE = BOT1_LEVERAGE;
-		QTY = CONTRACTS * LEVERAGE;
-	} else if (signalDetails.bot === 2) {
-		CONTRACTS = BOT2_CONTRACTS;
-		LEVERAGE = BOT2_LEVERAGE;
-		QTY = CONTRACTS * LEVERAGE;
-	} else {
-		functions.logger.error(`${appVersion} Bot ${signalDetails.bot} configuration not found`);
-		response.status(500).send(`${appVersion} Bot ${signalDetails.bot} configuration not found`);
-		return;
-	}
 	//
 	// Next Order
 	//
@@ -172,12 +124,14 @@ app.post('/', async (request, response) => {
 		{
 			side: signalDetails.order === "buy" ? "Buy" : "Sell",	// tradingview strategy fix for bybit
 			symbol: signalDetails.stock,
-			leverage: LEVERAGE,
+			leverage: signalDetails.leverage,
 			time_in_force: "ImmediateOrCancel",
-			qty: QTY,
+			qty: signalDetails.contracts,
 		};
 
-	const client = GetClient(signalDetails);
+	const client = GetByBitClient(signalDetails.bot, response);
+	if (!client) return;
+
 	//
 	// Strategy
 	//
@@ -208,6 +162,29 @@ app.post('/', async (request, response) => {
 		response.status(200).send(returnTxt);
 	}
 });
+
+async function ValidateRequestBody({ response, signalDetails}) {
+
+	// TradingView does not support custom request headers adding basic auth key to request body to give basic
+	// security to the api
+	if (signalDetails.auth_key !== functions.config().auth_key) {
+		functions.logger.error(`${appVersion} Error: auth_key in request body not valid`);
+		response.status(403).send(`${appVersion} Error: unauthorized`);
+		return false
+	}
+
+	// Check that all required parameters are in request body
+	const body_parameters = ['bot', 'order', 'stock', 'contracts', 'leverage']
+	body_parameters.forEach((parameter) => {
+		if (!signalDetails[parameter]) {
+			functions.logger.error(`${appVersion} Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`);
+			response.status(400).send(`${appVersion} Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`);
+			return false;
+		}
+	});
+
+	return true;
+}
 
 async function CancelAll(client, data)
 {
