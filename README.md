@@ -19,13 +19,13 @@ The following are required before beginning the Installation
 
 ### UP - Returns 200 if energy-bot is running
 ```http
-GET /scaper/up
+GET /scalper/up
 ```
 
 ### Config Validate - Returns 200 if config validation passes and can connect to bybit
 
 ```http
-GET /scaper/config/validate
+GET /scalper/config/validate
 ```
 
 ### Places an order on bybit - Returns 200 if order was successful
