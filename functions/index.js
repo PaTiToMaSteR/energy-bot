@@ -1,102 +1,120 @@
 const functions = require("firebase-functions");
-const { RestClient } = require("bybit-api");
+const { InverseClient, LinearClient } = require("bybit-api");
 const admin = require('firebase-admin');
 
 admin.initializeApp({
 	credential: admin.credential.applicationDefault(),
 });
 
-const express = require('express');
-const app = express();
-
 const appVersion = "1.0.4.2";
 
 let cancelSameSideOrders = false;
 let closePreviousPosition = true;
 
-function GetByBitClient(bot_number, response)
-{
-    // Use api and secret key for bot number passed in
-    const config = functions.config();
-    let bot_config_name = 'bot_' + bot_number;
-
-    if (!config[bot_config_name]) {
-        response.send(`bot ${bot_number} not found in config`).status(400)
-        return false;
-    }
-    return new RestClient(config[bot_config_name]['api_key'], config[bot_config_name]['secret_key']);
-}
+const express = require('express');
+const app = express();
 
 exports.scalper = functions.region('europe-west1').https.onRequest(app);
 
 // Basic up endpoint to that returns a 200 and api version
 // Useful for debugging / monitoring
 app.get('/up', async (request, response) => {
-	response.send(`I'm alive running version ${appVersion}`).status(200);
+	const msg = `I'm alive running version ${appVersion}`;
+	functions.logger.info(msg);
+	response.status(200).send(msg);
 });
 
 // Confirms that configuration values can be loaded and that api keys can auth to ByBit
-app.get('/config/validate', async (request, response) => {
+app.get('/config/validate', async (request, response, next) => {
+
+	functions.logger.info(`${appVersion} Running config validation`);
 
 	const config = functions.config();
 
-    if (config.auth_key === undefined) {
-        response.send(`Error auth_key config key not set`).status(500);
-        return;
+    if (config.auth_key === undefined || config.auth_key === '') {
+    	const error = new Error('auth_key config key not set with functions:config:set');
+		error.http_status = 500;
+		error.http_response = 'Error auth_key config key not set';
+		return next(error);
     }
 
 	if (config.bot_1 === undefined) {
-		response.send(`Error bot_1 config key not set at least one bot must be configured`).status(500);
-		return;
+		const error = new Error('bot_1 config key not set with functions:config:set');
+		error.http_status = 500;
+		error.http_response = 'Error bot_1 config key not set at least one bot must be configured';
+		return next(error);
 	}
 
-
-    // Test that each bot has api keys can connect to bybit looping through all config keys for bot_i
+    // Test that each bot's api keys can connect to bybit looping through all config keys for bot_i
     let i = 1;
 	let loop = true;
-    while (loop) {
 
-        let bot_number = 'bot_' + i
+	try {
+		while (loop) {
 
-        // If bot number doesn't exist break we are done
-        if (!config[bot_number]) {
-            break
-        }
+			let bot_number = 'bot_' + i;
 
-        if (config[bot_number]['api_key'] === undefined) {
-            response.send(`Error ${bot_number} api key not set`).status(500);
-            return;
-        }
+			// If bot number doesn't exist break we are done
+			if (!config[bot_number]) break;
 
-        if (config[bot_number]['secret_key'] === undefined) {
-            response.send(`Error ${bot_number} secret key not set`).status(500);
-            return;
-        }
+			if (config[bot_number]['api_key'] === undefined) {
+				const error = new Error('api_key not set with functions:config:set');
+				error.http_status = 500;
+				error.http_response = `Error ${bot_number} api_key not set`;
+				return next(error);
+			}
 
-        let client = new RestClient(config[bot_number]['api_key'], config[bot_number]['secret_key']);
+			if (config[bot_number]['secret_key'] === undefined) {
+				const error = new Error(`${bot_number} secret_key not set with functions:config:set`);
+				error.http_status = 500;
+				error.http_response = `Error ${bot_number} secret_key not set`;
+				return next(error);
+			}
 
-        client.getApiKeyInfo().then((apiKeyInfoResponse) =>
-        {
-            if (apiKeyInfoResponse.ret_code !== 0 ) {
-                apiKeyInfoResponse.ret_msg
-                response.send(`Error could not connect to bybit ${apiKeyInfoResponse.ret_msg}`).status(500)
+			if (config[bot_number]['mode'] !== 'test' && config[bot_number]['mode'] !== 'live') {
+				const error = new Error(`${bot_number} mode must be set to either live or test with 
+				functions:config:set`);
+				error.http_status = 500;
+				error.http_response = `Error ${bot_number} mode must be set to either live or test`;
+				return next(error);
+			}
 
-            } else {
-                response.send(`Config validation successful`).status(200)
-            }
-            return;
+			// We are only testing connection to bybit hard coding to BTCUSD is fine here
+			const bybit_client  = GetByBitClient('BTCUSD', i);
 
-        }).catch((err) =>
-        {
-            response.send(err).status(500)
-        });
+			bybit_client.getApiKeyInfo().then((apiKeyInfoResponse) => {
+				functions.logger.debug(`${bot_number} connecting to bybit`);
+				if (apiKeyInfoResponse.ret_code !== 0) {
+					functions.logger.error(`${bot_number} connection failed ${JSON.stringify(apiKeyInfoResponse)}`);
+					functions.logger.error(`${bot_number} connection failed`);
+					throw new Error(`${bot_number} could not connect to bybit
+					${JSON.stringify(apiKeyInfoResponse.ret_msg)}`);
+				} else {
+					functions.logger.debug(`${bot_number} connection successful`);
+					return null;
+				}
+			}).catch((err) => {
+				throw new Error(`${bot_number} could not connect to bybit ${err}`);
+			})
 
-        i++
-    }
+			i++;
+		}
+
+		response.status(200).send('Configuration Validation Successful');
+	} catch (error) {
+		error.http_status = 500;
+		error.http_response = `Error ${error}`;
+		return next(error);
+	}
 
 });
 
-app.post('/', async (request, response) => {
+// Use auth for all other requests
+app.use(AuthValidator);
+
+app.post('/', async (request, response, next) => {
+
+	functions.logger.info(`${appVersion} Scraper request received`);
 
 	let signalDetails = null;
 
@@ -106,119 +124,174 @@ app.post('/', async (request, response) => {
 		} else {
 			signalDetails = JSON.parse(request.body);
 		}
-	} catch (err) {
-		functions.logger.error(`${appVersion} ${err}`);
-		response.status(500);
-		response.send(`Error: ${err}`);
-		return;
-	}
-	functions.logger.info(JSON.stringify(signalDetails));
 
-	if (!await ValidateRequestBody({response, signalDetails})) return;
+		functions.logger.info(JSON.stringify(signalDetails));
 
-	//
-	// Next Order
-	//
-	const orderDetails =
-		{
-			side: signalDetails.order === "buy" ? "Buy" : "Sell",	// tradingview strategy fix for bybit
-			symbol: signalDetails.stock,
-			leverage: signalDetails.leverage,
-			time_in_force: "ImmediateOrCancel",
-			qty: signalDetails.contracts,
-		};
+		await ValidateRequestBody(signalDetails).catch();
 
-	if (!GetByBitClient(signalDetails.bot, response)) return;
+		const orderDetails =
+			{
+				side: signalDetails.order === "buy" ? "Buy" : "Sell",	// tradingview strategy fix for bybit
+				symbol: signalDetails.symbol,
+				leverage: signalDetails.leverage,
+				time_in_force: "ImmediateOrCancel",
+				qty: signalDetails.contracts * signalDetails.leverage,
+			};
 
-	//
-	// Strategy
-	//
-	if (signalDetails.order === "buy") {
-		cancelSameSideOrders = true;
-		closePreviousPosition = true;
-		functions.logger.info(`${appVersion} OPEN TRADE ACTION: ${signalDetails.stock}`);
-		await createOrder({
-			response: response,
-			signalDetails: signalDetails,
-			client: client,
-			orderDetails: orderDetails
-		});
-	}
+		const bybit_client = GetByBitClient(signalDetails.symbol, signalDetails.bot);
+
 		//
-		// Close order
-	//
-	else if (signalDetails.order === "sell") {
-		functions.logger.info(`${appVersion} CLOSE TRADE ACTION: ${signalDetails.stock}`);
-		await StopOrder({response: response, client: client, signalDetails: signalDetails});
-	}
+		// Strategy
 		//
-		// Bad conditions
-	//
-	else {
-		const returnTxt = `${appVersion} Discarded action on interval: ${signalDetails.interval}`;
-		functions.logger.info(returnTxt);
-		response.status(200).send(returnTxt);
+		if (signalDetails.order === "buy") {
+			cancelSameSideOrders = true;
+			closePreviousPosition = true;
+			functions.logger.info(`${appVersion} OPEN TRADE ACTION: ${signalDetails.symbol}`);
+			await createOrder({
+				response: response,
+				signalDetails: signalDetails,
+				client: bybit_client,
+				orderDetails: orderDetails
+			});
+		}
+		//
+        // Close order
+		//
+		else if (signalDetails.order === "sell") {
+			functions.logger.info(`${appVersion} CLOSE TRADE ACTION: ${signalDetails.symbol}`);
+			await StopOrder({response: response, client: bybit_client, signalDetails: signalDetails});
+		}
+        //
+        // Bad conditions
+		//
+		else {
+			const error = new Error(`Order field in request body must be set to buy or sell ${JSON.stringify(signalDetails)}`);
+			error.http_status = 400;
+			error.http_response = 'Order field in request body must be set to buy or sell';
+			throw error;
+		}
+
+	} catch (error) {
+		return next(error);
 	}
+
 });
 
-async function ValidateRequestBody({ response, signalDetails}) {
+// error handler middleware
+app.use((error, request, response, next) => {
+	functions.logger.error(error.message)
+	response.status(error.http_status || 500).send({
+		error: {
+			status: error.http_status || 500,
+			message: error.http_response || 'Internal Server Error',},
+	});
+});
 
+async function AuthValidator (request, response, next) {
 	// TradingView does not support custom request headers adding basic auth key to request body to give basic
 	// security to the api
-	if (signalDetails.auth_key !== functions.config().auth_key) {
-		functions.logger.error(`${appVersion} Error: auth_key in request body not valid`);
-		response.status(403).send(`${appVersion} Error: unauthorized`);
-		return false
+	if (!functions.config().auth_key) {
+		const error = new Error('auth_key config key not found');
+		error.http_status = 403;
+		error.http_response = 'Unauthorized';
+		return next(error);
 	}
 
+	if (request.body.auth_key === functions.config().auth_key) {
+		functions.logger.info(`auth_key in request body valid`);
+		return next();
+	} else {
+		const error = new Error('auth_key in request body not valid or not provided');
+		error.http_status = 403;
+		error.http_response = 'Unauthorized';
+		return next(error);
+	}
+
+}
+
+function GetByBitClient(symbol, bot_number) {
+    // Use api and secret key for bot number passed in
+    const config = functions.config();
+    let bot_config_name = 'bot_' + bot_number;
+
+    if (!config[bot_config_name]) {
+		const error = new Error(`bot ${bot_config_name} not found in config`);
+		error.http_status = 400;
+		error.http_response = `bot ${bot_config_name} not found in config`;
+		throw error;
+    }
+
+	let use_live_mode = config[bot_config_name]['mode'] === 'live';
+
+    // Get the right client for the symbol in the request
+	if (symbol.endsWith("USDT")) {
+		return new LinearClient(config[bot_config_name]['api_key'], config[bot_config_name]['secret_key'], use_live_mode);
+	} else {
+		return new InverseClient(config[bot_config_name]['api_key'], config[bot_config_name]['secret_key'], use_live_mode);
+	}
+
+}
+
+async function ValidateRequestBody(signalDetails) {
+
 	// Check that all required parameters are in request body
-	const body_parameters = ['bot', 'order', 'stock', 'contracts', 'leverage']
+	const body_parameters = ['bot', 'order', 'symbol', 'contracts', 'leverage'];
 
 	for(const parameter of body_parameters) {
 		if (!signalDetails[parameter]) {
-			functions.logger.error(`${appVersion} Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`);
-			response.status(400).send(`${appVersion} Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`);
-			return false;
+			const error = new Error(`Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`);
+			error.http_status = 400;
+			error.http_response = `Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`;
+			throw error;
 		}
 	}
 
-	return true;
 }
 
 async function CancelAll(client, data)
 {
+
+	functions.logger.info(`Canceling all orders ${JSON.stringify(data)}`);
 	//
 	// Cancel ALL active orders
 	//
-	console.log(`${appVersion} CancelAll ${JSON.stringify(data)}`);
-	await client.cancelAllActiveOrders(data).then((cancelAllActiveOrdersResponse) =>
-	{
-		console.log(`${appVersion} cancelAllActiveOrdersResponse ${JSON.stringify(cancelAllActiveOrdersResponse)}`);
+
+	functions.logger.info(`Canceling all active orders ${JSON.stringify(data)}`);
+	await client.cancelAllActiveOrders(data).then((cancelAllActiveOrdersResponse) => {
+		if (cancelAllActiveOrdersResponse.ret_code !== 0 ) {
+			const error = new Error(`Error canceling all active orders ${cancelAllActiveOrdersResponse.ret_msg}`);
+			error.http_status = 500;
+			error.http_response = 'Error canceling all active orders';
+			throw error;
+		}
 		return true;
-	}).catch((err) =>
+	}).catch((error) =>
 	{
-		functions.logger.error(`${appVersion} cancelAllActiveOrders Error: ${err}`);
+		error.http_status = 500;
+		throw error;
 	});
-	//
-	// Cancel ALL conditional orders
-	//
-	/*
-	await client.cancelAllConditionalOrders(data).then((cancelAllConditionalOrdersResponse) =>
-	{
-		console.log(`${appVersion} cancelAllConditionalOrdersResponse ${JSON.stringify(cancelAllConditionalOrdersResponse)}`);
+
+	functions.logger.info(`Canceling all conditional orders ${JSON.stringify(data)}`);
+	await client.cancelAllConditionalOrders(data).then((cancelAllConditionalOrdersResponse) => {
+		if (cancelAllConditionalOrdersResponse.ret_code !== 0 ) {
+			const error = new Error(`Error canceling all conditional orders ${cancelAllConditionalOrdersResponse.ret_msg}`);
+			error.http_status = 500;
+			error.http_response = 'Error canceling all conditional orders';
+			throw error;
+		}
 		return true;
-	}).catch((err) => 
+	}).catch((error) =>
 	{
-		functions.logger.error(`${appVersion} cancelAllConditionalOrders Error: ${err}`);
+		error.http_status = 500;
+		throw error;
 	});
-	*/
+
 }
 
 async function GetCurrentPosition(client, data)
 {
 	return await client.getPosition(data).then((positionsResponse) =>
 	{
-		//console.log(`${appVersion} GetCurrentPosition::getPositions ${JSON.stringify(positionsResponse)}`);
 		let currentPosition = null;
 		for (let i = 0; i < positionsResponse.result.length; ++i)
 		{
@@ -226,7 +299,6 @@ async function GetCurrentPosition(client, data)
 			if (position.symbol === data.symbol)
 			{
 				currentPosition = position;
-				//console.log(`${appVersion} GetCurrentPosition ${JSON.stringify(position)}`);
 				functions.logger.info(`${appVersion} GetCurrentPosition - Side: ${position.side} Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
 				return currentPosition;
 			}
@@ -306,11 +378,13 @@ async function StopOrder({ response, client, signalDetails })
 {
 	try
 	{
-		CancelAll(client, { symbol: signalDetails.stock });
+		await CancelAll(client, { symbol: signalDetails.symbol });
+
 		//
 		// Current Position
 		//
-		const currentPosition = await GetCurrentPosition(client, { symbol: signalDetails.stock });
+		const currentPosition = await GetCurrentPosition(client, { symbol: signalDetails.symbol });
+
 		//********************************************************************************************************** */
 		//
 		// Close Previous Order
@@ -339,84 +413,86 @@ async function StopOrder({ response, client, signalDetails })
 	}
 }
 
-async function createOrder({ response, client, orderDetails, conditionalOrderBuffer = null, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null })
-{
-	try
-	{
-		CancelAll(client, { symbol: orderDetails.symbol });
-		//
-		// Market Order
-		//
-		orderDetails.order_type = "Market";
-		//
-		// Current Position
-		//
-		const currentPosition = await GetCurrentPosition(client, { symbol: orderDetails.symbol });
-		if (currentPosition)
-		{
-			//********************************************************************************************************** */
-			//
-			// Reject SAME order
-			//
-			//********************************************************************************************************** */
-			//console.log(`${appVersion} currentPosition ${currentPosition.sid}e closeOrderType ${closeOrderType}`);
-			if (cancelSameSideOrders === false && currentPosition.side === orderDetails.side)
-			{
-				const msg = `${appVersion} SAME ALERT: ${currentPosition.side}`;
+async function createOrder({ response, client, orderDetails, conditionalOrderBuffer = null, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null }) {
 
-				functions.logger.warn(msg);
-				response.status(200).send(msg);
-				return true;
-			}
-			//********************************************************************************************************** */
-			//
-			// Close Previous Order
-			//
-			//********************************************************************************************************** */
-			if (closePreviousPosition)
-			{
-				await ClosePreviousPosition(currentPosition, client);
-			}
-			//********************************************************************************************************** */
-			//
-			// Update Leverage
-			//
-			//********************************************************************************************************** */
-			await client.changeUserLeverage({ symbol: orderDetails.symbol, leverage: orderDetails.leverage }).then((changeLeverageResponse) =>
-			{
-				//console.log(`${appVersion} ${JSON.stringify(changeLeverageResponse)}`);
-				return changeLeverageResponse;
-			}).catch((err) =>
-			{
-				functions.logger.error(`${appVersion} changeUserLeverage Error: ${err}`);
-			});
-			//********************************************************************************************************** */
-			//
-			// New Order
-			//
-			//********************************************************************************************************** */
-			const placeActiveOrderResponse = await PlaceNewOrder(response, client, orderDetails, conditionalOrderBuffer, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin)
-			//
-			// Return result
-			//
-			placeActiveOrderResponse.ret_code !== 0 ? response.status(500) : response.status(200);
-			response.send(placeActiveOrderResponse);
+	await CancelAll(client, { symbol: orderDetails.symbol });
+
+	//
+	// Market Order
+	//
+	orderDetails.order_type = "Market";
+
+	//
+	// Current Position
+	//
+	const currentPosition = await GetCurrentPosition(client, { symbol: orderDetails.symbol });
+	if (currentPosition) {
+		functions.logger.info('There is a current position');
+		//********************************************************************************************************** */
+		//
+		// Reject SAME order
+		//
+		//********************************************************************************************************** */
+		if (cancelSameSideOrders === false && currentPosition.side === orderDetails.side)
+		{
+			const msg = `${appVersion} SAME ALERT: ${currentPosition.side}`;
+
+			functions.logger.warn(msg);
+			response.status(200).send(msg);
 			return true;
 		}
-		else
+		//********************************************************************************************************** */
+		//
+		// Close Previous Order
+		//
+		//********************************************************************************************************** */
+		if (closePreviousPosition)
 		{
-			const msgText = `${appVersion} createOrder GetCurrentPosition: ${currentPosition}`;
-			functions.logger.error(msgText);
-			response.status(500).send(msgText);
-			return false;
+			await ClosePreviousPosition(currentPosition, client);
 		}
+
 	}
-	catch (err)
+
+	//********************************************************************************************************** */
+	//
+	// Update Leverage
+	//
+	//********************************************************************************************************** */
+	functions.logger.debug(`Setting User leverage to ${orderDetails.leverage}`);
+	await client.setUserLeverage({ symbol: orderDetails.symbol, leverage: orderDetails.leverage }).then((changeLeverageResponse) => {
+		if (changeLeverageResponse.ret_code !== 0 ) {
+			const error = new Error(`Error changing leverage ${changeLeverageResponse.ret_msg}`);
+			error.http_status = 500;
+			error.http_response = 'Error changing leverage';
+			throw error;
+		}
+		return true;
+	}).catch((error) =>
 	{
-		functions.logger.error(`${appVersion} createOrder Error: ${err}`);
-		response.status(500).send(err);
-		return false;
-	}
+		error.http_status = 500;
+		throw error;
+	});
+
+	//********************************************************************************************************** */
+	//
+	// New Order
+	//
+	//********************************************************************************************************** */
+	functions.logger.debug(`Placing order for ${JSON.stringify(orderDetails)}`);
+	await PlaceNewOrder(response, client, orderDetails, conditionalOrderBuffer, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin).then((placeActiveOrderResponse) => {
+		if (placeActiveOrderResponse.ret_code !== 0 ) {
+			const error = new Error(`Error placing order ${placeActiveOrderResponse.ret_msg}`);
+			error.http_status = 500;
+			error.http_response = 'Error placing order';
+			throw error;
+		}
+		return true;
+	}).catch((error) =>
+	{
+		error.http_status = 500;
+		throw error;
+	});
+
 }
 
 async function SecureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null)
