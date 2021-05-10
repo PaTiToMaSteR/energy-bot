@@ -8,8 +8,7 @@ admin.initializeApp({
 
 const appVersion = "1.0.4.2";
 
-let cancelSameSideOrders = false;
-let closePreviousPositions = true;
+let closeOppositeSidePositions = true; // If an order is received that is the opposite position it wil be closed.
 
 const express = require('express');
 const app = express();
@@ -107,6 +106,8 @@ app.get('/config/validate', async (request, response, next) => {
 		return next(error);
 	}
 
+	return next();
+
 });
 
 // Use auth for all other requests
@@ -144,8 +145,6 @@ app.post('/', async (request, response, next) => {
 		// Strategy
 		//
 		if (signalDetails.order === "buy") {
-			cancelSameSideOrders = true;
-			closePreviousPositions = true;
 			functions.logger.info(`${appVersion} OPEN TRADE ACTION: ${signalDetails.symbol}`);
 			await createOrder({
 				response: response,
@@ -165,6 +164,8 @@ app.post('/', async (request, response, next) => {
 	} catch (error) {
 		return next(error);
 	}
+
+	return next()
 
 });
 
@@ -314,7 +315,7 @@ async function getCurrentPosition(client, data) {
 			const position = positionsResponse.result[i].data;
 			if (position.symbol === data.symbol) {
 				currentPosition = position;
-				functions.logger.debug(`${appVersion} GetCurrentPosition - Side: ${position.side} 
+				functions.logger.debug(`GetCurrentPosition - Side: ${position.side} 
 				Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
 				return currentPosition;
 			}
@@ -341,9 +342,7 @@ async function closePreviousPosition(currentPosition, client) {
 			close_on_trigger: true,
 		};
 
-		//
 		// Close Previous order
-		//
 		return await client.placeActiveOrder(closingOrder).then((closeActiveOrderResponse) => {
 			if (closeActiveOrderResponse.ret_code !== 0 ) {
 				const error = new Error(`Error placing order to close previous position ${closeActiveOrderResponse.ret_msg}`);
@@ -434,45 +433,22 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 
 	await cancelAll(client, { symbol: orderDetails.symbol });
 
-	//
 	// Market Order
-	//
 	orderDetails.order_type = "Market";
 
-	//
 	// Current Position
-	//
 	const currentPosition = await getCurrentPosition(client, { symbol: orderDetails.symbol });
 	if (currentPosition) {
 		functions.logger.info('There is a current position');
-		//********************************************************************************************************** */
-		//
-		// Reject SAME order
-		//
-		//********************************************************************************************************** */
-		if (cancelSameSideOrders === false && currentPosition.side === orderDetails.side) {
-			const msg = `${appVersion} SAME ALERT: ${currentPosition.side}`;
 
-			functions.logger.warn(msg);
-			response.status(200).send(msg);
-			return true;
-		}
-		//********************************************************************************************************** */
-		//
-		// Close Previous Order
-		//
-		//********************************************************************************************************** */
-		if (closePreviousPositions) {
+		// If opposite side position exists for symbol close that position before opening opposite position
+		if (closeOppositeSidePositions) {
 			await closePreviousPosition(currentPosition, client);
 		}
 
 	}
 
-	//********************************************************************************************************** */
-	//
 	// Update Leverage
-	//
-	//********************************************************************************************************** */
 	functions.logger.debug(`Setting User leverage to ${orderDetails.leverage}`);
 	await client.setUserLeverage({ symbol: orderDetails.symbol, leverage: orderDetails.leverage }).then((changeLeverageResponse) => {
 		functions.logger.debug(JSON.stringify(changeLeverageResponse))
@@ -488,11 +464,7 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 		throw error;
 	});
 
-	//********************************************************************************************************** */
-	//
 	// New Order
-	//
-	//********************************************************************************************************** */
 	functions.logger.debug(`Placing order for ${JSON.stringify(orderDetails)}`);
 	await placeNewOrder(response, client, orderDetails, conditionalOrderBuffer, tradingStopMultiplier,
 		tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin).then((placeActiveOrderResponse) => {
