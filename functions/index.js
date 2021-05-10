@@ -145,7 +145,7 @@ app.post('/', async (request, response, next) => {
 		// Strategy
 		//
 		if (signalDetails.order === "buy") {
-			functions.logger.info(`${appVersion} OPEN TRADE ACTION: ${signalDetails.symbol}`);
+			functions.logger.info(`Opening trade: ${signalDetails.symbol}`);
 			await createOrder({
 				response: response,
 				signalDetails: signalDetails,
@@ -157,7 +157,7 @@ app.post('/', async (request, response, next) => {
         // Close order
 		//
 		else if (signalDetails.order === "sell") {
-			functions.logger.info(`${appVersion} CLOSE TRADE ACTION: ${signalDetails.symbol}`);
+			functions.logger.info(`Closing trade: ${signalDetails.symbol}`);
 			await stopOrder({response: response, client: bybitClient, signalDetails: signalDetails});
 		}
 
@@ -315,8 +315,7 @@ async function getCurrentPosition(client, data) {
 			const position = positionsResponse.result[i].data;
 			if (position.symbol === data.symbol) {
 				currentPosition = position;
-				functions.logger.debug(`GetCurrentPosition - Side: ${position.side} 
-				Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
+				functions.logger.debug(`Current position - Side: ${position.side} Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
 				return currentPosition;
 			}
 		}
@@ -391,28 +390,18 @@ async function stopOrder({ response, client, signalDetails }) {
 	try {
 		await cancelAll(client, { symbol: signalDetails.symbol });
 
-		//
 		// Current Position
-		//
 		const currentPosition = await getCurrentPosition(client, { symbol: signalDetails.symbol });
 
-		//********************************************************************************************************** */
-		//
 		// Close Previous Order
-		//
-		//********************************************************************************************************** */
-		if (currentPosition) {
+		if (currentPosition.size > 0) {
 			const success = await closePreviousPosition(currentPosition, client);
-			//
-			// Return result
-			//
 			success ? response.status(200) : response.status(500);
-			response.status(200).send('Sell Order Placed Successfully');
-			return true;
+			response.status(200).send('Sell order placed Successfully');
 		}
 		else {
+			functions.logger.info('There is no current position open')
 			response.status(200).send(`There is no current position open`);
-			return;
 		}
 	}
 	catch (error) {
