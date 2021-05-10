@@ -49,7 +49,7 @@ application in google firebase. Steps could be slightly different if you have an
           next step (A password manager is a place good)
         * Once you have copied them down Click *Understood*
         ![bybit-key-sucessfully-added.png](doc-imgs/bybit-key-sucessfully-added.png)
-5. Deploy Bot to Firebase by running the following commands
+5. Deploy Bot to Firebase by running the following commands in your terminal of choice
     ```shell
     git clone https://github.com/PaTiToMaSteR/energy-bot.git
     cd energy-bot
@@ -61,7 +61,17 @@ application in google firebase. Steps could be slightly different if you have an
     firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY_FROM_STEP_4"
     firebase functions:config:set bot_1.mode="'test' for testnet bybit or 'live' for normal bybit"
     firebase functions:config:set auth_key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
+    # NOTE you can repeat the bot config keys to support multiple bots by adding bot_2.api_key bot_2.secret_key bot_2.mode
+    # This can be repeated any number of times but must go in number order i.e. you cannot add bot_4.api_key without
+    # having a bot 1, 2, and 3 configured first
     firebase deploy
     ```
-6. Confirm your bot loads
-    * In your web browser of choice go to http://${url}/up
+6. Confirm your bot loads (TODO document how to get url for specific user deployment)
+    * In your web browser of choice go to https://${url}/scalper/up it should display *I'm live*
+    ![up-response.png](doc-imgs/up-response.png)
+        * If it does not you missed a step above or are using the wrong URL
+    * In your web browser of choice go to https://${url}/scalper/config/validate it should display 
+      *Configuration Validation Successful*
+    ![img.png](doc-imgs/config-validate-response.png)
+        * If it does not there is a configuration issue look at the output it should tell you want is wrong
+7. Step up complete you can now set up trading view alerts to energy-bot!

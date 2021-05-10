@@ -33,27 +33,6 @@ Follow setup instructions below
 
 [Set Up Instructions](SETUP.md)
 
-## Upgrades
-
-Remember to always test upgrades in testnet before using live!
-
-```shell
-cd energy-bot
-git pull
-firebase deploy
-```
-
-## Updating Configuration
-
-```shell
-cd energy-bot
-firebase functions:config:set bot_1.api_key="REPLACE_WITH_BYBIT_API_KEY"
-firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY"
-firebase functions:config:set bot_1.mode="'test' for testnet bybit or 'live' for normal bybit"
-firebase functions:config:set auth_key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
-firebase deploy
-```
-
 ## Supported Requests
 
 ### UP - Returns 200 if energy bot is up and running
@@ -101,7 +80,32 @@ Content-Type: application/json
 | `contracts` | `int` | **Required**. Number of contracts |
 | `auth_key` | `string` | **Required**. Auth key set as part of configuration |
 | `leverage` | `string` | **Required**. Leverage to use for the order |
-    
+
+## Upgrades
+
+Remember to always test upgrades in testnet before using live!
+
+```shell
+cd energy-bot
+git pull
+firebase deploy
+```
+
+## Updating Configuration
+
+```shell
+cd energy-bot
+firebase functions:config:set bot_1.api_key="REPLACE_WITH_BYBIT_API_KEY"
+firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY"
+firebase functions:config:set bot_1.mode="'test' for testnet bybit or 'live' for normal bybit"
+firebase functions:config:set auth_key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
+firebase deploy
+```
+
+## Logs
+
+you can see the logs by TODO
+
 ## Developing Locally
 
 * Install Firebase CLI https://firebase.google.com/docs/cli
