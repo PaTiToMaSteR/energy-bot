@@ -1,30 +1,34 @@
+# Setup
+Follow these instructions to set up energy-bot on Google Firebase. They assume this is the first time setting up an
+application in google firebase. Steps could be slightly different if you have an app already in firebase.
+
 1. Create Firebase Project for Deployment
     * Open Web Browser of choice and navigate to https://console.firebase.google.com
-        * if you are not logged into your google account you will be asked to sign in    
-          ![img.png](doc-imgs/img.png)
+        * if you are not logged into your google account you will be asked to sign in by entering your google account
+        information
     * Click *Create a project* button
+      ![create_project.png](doc-imgs/create-project.png)
     * Type *energy-bot* in Project name field
     * Check *I accept the firebase terms* box
-      ![img_1.png](doc-imgs/img_1.png)
+      ![naming_project.png](doc-imgs/naming-project.png)
     * Click *Continue* button
     * Click *Continue* button on Google Analytics page
-      ![img_2.png](doc-imgs/img_2.png)
-        * Click *Create Project* button on Configure Google Analytics page
-          ![img_3.png](doc-imgs/img_3.png)
-            * Wait for project to finish creating once done Click *Continue button
-              ![img_4.png](doc-imgs/img_4.png)
+      ![google-analytics.png](doc-imgs/google-analytics.png)
+    * Click *Create Project* button on Configure Google Analytics page
+      ![configure-google-analytics.png](doc-imgs/configure-google-analytics.png)
+    * Wait for project to finish creating once done Click *Continue* button
+      ![waiting-for-project-creation.png](doc-imgs/waiting-for-project-creation.png)
 2. Upgrade Firebase Project to Blaze
-* Click *Upgrade* button on bottom right corner of screen
-  ![img_5.png](doc-imgs/img_5.png)
+    * Click *Upgrade* button on bottom right corner of screen
+    ![blaze-upgrade-button.png](doc-imgs/blaze-upgrade-button.png)
     * Click *Select Plan* button to upgrade firebase project to Blaze (This is required to run webhooks in firebase)
-      ![img_6.png](doc-imgs/img_6.png)
-        * Click *Continue* button
-          ![img_7.png](doc-imgs/img_7.png)
-            * Click *Continue* button
-              ![img_8.png](doc-imgs/img_8.png) # TODO need to fix this one to not have PII
-              # TODO finish this
+    ![select-plan-button.png](doc-imgs/select-plan-button.png)
+    * Click *Continue* button
+    ![charge-warning.png](doc-imgs/charge-warning.png)
+    * Click *Continue* button
+    ![create-new-billing-account.png](doc-imgs/create-new-billing-account.png)
 3. Install Firebase CLI (This is a command line tool that is used to interact with google firebase platform and preform
-   the bot deployment)
+   energy bot deployment)
     * Download Firebase cli
         * Windows https://firebase.tools/bin/win/instant/latest
         * MacOS
@@ -35,6 +39,9 @@
 5. Generate ByBit API keys
     * Login to bybit account
       ** Test URL
-6. Deploy Bot to Firebase
+6. Deploy Bot to Firebase by running the following commands
+   ```shell
+   firebase 
+```
 7. Confirm your bot loads
     * In your web browser of choice 
