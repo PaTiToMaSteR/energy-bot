@@ -29,9 +29,7 @@ application in google firebase. Steps could be slightly different if you have an
     ![create-new-billing-account.png](doc-imgs/create-new-billing-account.png)
 3. Install Firebase CLI (This is a command line tool that is used to interact with google firebase platform and preform
    energy bot deployment)
-    * Download Firebase cli
-        * Windows https://firebase.tools/bin/win/instant/latest
-        * MacOS
+    * Following instructions for your OS here https://firebase.google.com/docs/cli
 4. Login to firebase CLI
     * Open terminal window
         * Windows
@@ -41,7 +39,14 @@ application in google firebase. Steps could be slightly different if you have an
       ** Test URL
 6. Deploy Bot to Firebase by running the following commands
    ```shell
-   firebase 
+   firebase use --add 
+   # Select choice that begains with energy-bot and hit enter key, 
+   # When prompted for alias enter 'live' and hit enter key
+   firebase functions:config:set bot_1.api_key="REPLACE_WITH_BYBIT_API_KEY_FROM_STEP_5"
+   firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY_FROM_STEP_5"
+   firebase functions:config:set bot_1.mode="'test' for test or 'live' for prod mode"
+   firebase functions:config:set auth_key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
+   firebase deploy
 ```
 7. Confirm your bot loads
     * In your web browser of choice 
