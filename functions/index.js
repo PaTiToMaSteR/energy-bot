@@ -311,10 +311,11 @@ async function getCurrentPosition(client, data) {
 		functions.logger.debug(` Positions response ${JSON.stringify(positionsResponse)}`)
 		let currentPosition = null;
 		for (let i = 0; i < positionsResponse.result.length; ++i) {
-			const position = positionsResponse.result[i];
+			const position = positionsResponse.result[i].data;
 			if (position.symbol === data.symbol) {
 				currentPosition = position;
-				functions.logger.info(`${appVersion} GetCurrentPosition - Side: ${position.side} Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
+				functions.logger.debug(`${appVersion} GetCurrentPosition - Side: ${position.side} 
+				Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
 				return currentPosition;
 			}
 		}
@@ -350,7 +351,8 @@ async function closePreviousPosition(currentPosition, client) {
 				error.http_response = 'Error placing order to close previous position';
 				throw error;
 			}
-			functions.logger.info(`${appVersion} ClosePreviousPosition: ${closeActiveOrderResponse.symbol} ${closeActiveOrderResponse.side} ${closeActiveOrderResponse.price} ${closeActiveOrderResponse.qty}`)
+			functions.logger.info(`${appVersion} ClosePreviousPosition: ${closeActiveOrderResponse.symbol} 
+			${closeActiveOrderResponse.side} ${closeActiveOrderResponse.price} ${closeActiveOrderResponse.qty}`)
 			return true;
 		}).catch((error) => {
 			error.http_status = 500;
@@ -368,13 +370,15 @@ async function placeNewOrder(response, client, orderDetails, conditionalOrderBuf
 	return await client.placeActiveOrder(orderDetails).then(async (placeActiveOrderResponse) => {
 		console.log(`${appVersion} PlaceNewOrder ${JSON.stringify(placeActiveOrderResponse)}`);
 		if (placeActiveOrderResponse.ret_code === 0) {
-			if (conditionalOrderBuffer !== 0 || (tradingStopMultiplier === 0 && tradingStopActivationMultiplier === 0 && stopLossMargin === 0 && takeProfitMargin === 0)) {
+			if (conditionalOrderBuffer !== 0 || (tradingStopMultiplier === 0 && tradingStopActivationMultiplier === 0 &&
+				stopLossMargin === 0 && takeProfitMargin === 0)) {
 				return placeActiveOrderResponse;
 			}
 			else {
 				//setTimeout(() =>
 				//{
-				await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+				await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier,
+					tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
 				//}, 300);
 
 				return placeActiveOrderResponse;
@@ -413,6 +417,7 @@ async function stopOrder({ response, client, signalDetails }) {
 		}
 		else {
 			response.status(200).send(`There is no current position open`);
+			return;
 		}
 	}
 	catch (error) {
@@ -423,7 +428,9 @@ async function stopOrder({ response, client, signalDetails }) {
 
 }
 
-async function createOrder({ response, client, orderDetails, conditionalOrderBuffer = null, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null }) {
+async function createOrder({ response, client, orderDetails, conditionalOrderBuffer = null,
+							   tradingStopMultiplier = null, tradingStopActivationMultiplier = null,
+							   stopLossMargin = null, takeProfitMargin = null }) {
 
 	await cancelAll(client, { symbol: orderDetails.symbol });
 
@@ -487,7 +494,8 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 	//
 	//********************************************************************************************************** */
 	functions.logger.debug(`Placing order for ${JSON.stringify(orderDetails)}`);
-	await placeNewOrder(response, client, orderDetails, conditionalOrderBuffer, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin).then((placeActiveOrderResponse) => {
+	await placeNewOrder(response, client, orderDetails, conditionalOrderBuffer, tradingStopMultiplier,
+		tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin).then((placeActiveOrderResponse) => {
 		if (placeActiveOrderResponse.ret_code !== 0 ) {
 			const error = new Error(`Error placing order ${placeActiveOrderResponse.ret_msg}`);
 			error.http_status = 500;
@@ -505,18 +513,22 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 
 }
 
-async function secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null) {
+async function secureTransaction(response, placeActiveOrderResponse, client, orderDetails,
+								 tradingStopMultiplier = null, tradingStopActivationMultiplier = null,
+								 stopLossMargin = null, takeProfitMargin = null) {
 	try {
 		const currentPosition = await getCurrentPosition(client, { symbol: orderDetails.symbol });
 		if (currentPosition.side === "None") {
 			console.log(`${appVersion} \n\n\ncurrentPosition.side: ${currentPosition.side} | Trying again!\n\n\n`);
 			//setTimeout(() =>
 			//{
-			await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+			await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier,
+				tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
 			//}, 100);
 		}
 		else {
-			await setTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+			await setTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails,
+				tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
 		}
 	}
 	catch (error) {
@@ -528,7 +540,9 @@ async function secureTransaction(response, placeActiveOrderResponse, client, ord
 
 let tradingStopTries = 0;
 const tradingStopTriesMax = 2;
-async function setTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null) {
+async function setTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails,
+							  tradingStopMultiplier = null, tradingStopActivationMultiplier = null,
+							  stopLossMargin = null, takeProfitMargin = null) {
 	try {
 		// 35581*(1-(0.25/25))
 		/*
