@@ -427,7 +427,8 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 		functions.logger.info('There is a current position');
 
 		// If opposite side position exists for symbol close that position before opening opposite position
-		if (closeOppositeSidePositions) {
+		if (closeOppositeSidePositions && currentPosition.side !== orderDetails.side) {
+			functions.logger.info('Current position is not the same side as requested closing opposite side position');
 			await closePreviousPosition(currentPosition, client);
 		}
 
