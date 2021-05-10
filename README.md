@@ -25,12 +25,34 @@ The following are required before beginning the Installation
 * TradingView Account
 * Google Account
 * Modern Web browser
+* Git
 
 ## Installation
 
 Follow setup instructions below
 
 [Set Up Instructions](SETUP.md)
+
+## Upgrades
+
+Remember to always test upgrades in testnet before using live!
+
+```shell
+cd energy-bot
+git pull
+firebase deploy
+```
+
+## Updating Configuration
+
+```shell
+cd energy-bot
+firebase functions:config:set bot_1.api_key="REPLACE_WITH_BYBIT_API_KEY"
+firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY"
+firebase functions:config:set bot_1.mode="'test' for testnet bybit or 'live' for normal bybit"
+firebase functions:config:set auth_key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
+firebase deploy
+```
 
 ## Supported Requests
 
@@ -85,6 +107,8 @@ Content-Type: application/json
 * Install Firebase CLI https://firebase.google.com/docs/cli
 * Run Following commands
 ```shell
+git clone https://github.com/PaTiToMaSteR/energy-bot.git
+cd energy-bot
 mv ./functions/.runtimeconfig.json.tpl ./functions/.runtimeconfig.json.tpl
 # Update .runtimeconfig.json with you keys and settings using your favorite IDE / text editor
 vim .runtimeconfig.json
