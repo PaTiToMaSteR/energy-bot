@@ -367,26 +367,22 @@ async function closePreviousPosition(currentPosition, client) {
 async function placeNewOrder(response, client, orderDetails, conditionalOrderBuffer = null, tradingStopMultiplier = null,
 							 tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null) {
 	return await client.placeActiveOrder(orderDetails).then(async (placeActiveOrderResponse) => {
-		console.log(`${appVersion} PlaceNewOrder ${JSON.stringify(placeActiveOrderResponse)}`);
+		functions.logger.info(`Place active order response ${JSON.stringify(placeActiveOrderResponse)}`);
 		if (placeActiveOrderResponse.ret_code === 0) {
 			if (conditionalOrderBuffer !== 0 || (tradingStopMultiplier === 0 && tradingStopActivationMultiplier === 0 &&
 				stopLossMargin === 0 && takeProfitMargin === 0)) {
 				return placeActiveOrderResponse;
 			}
 			else {
-				//setTimeout(() =>
-				//{
 				await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier,
 					tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
-				//}, 300);
-
 				return placeActiveOrderResponse;
 			}
 		}
 		return placeActiveOrderResponse;
 	}).catch((error) => {
 		error.http_status = 500;
-		error.http_response = 'Place Active Order Error';
+		error.http_response = 'Place active order Error';
 		throw error;
 	});
 }
