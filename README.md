@@ -26,23 +26,51 @@ The following are required before beginning the Installation
 * Google Account
 * Modern Web browser
 
+## Installation
+
+Follow setup instructions below
+
+[Set Up Instructions](SETUP.md)
+
 ## Supported Requests
 
-### UP - Returns 200 if energy-bot is running
+### UP - Returns 200 if energy bot is up and running
+
+Request
 ```http
 GET /scalper/up
+```
+Response
+```http
+I'm alive running version 1.0.4.2
 ```
 
 ### Config Validate - Returns 200 if config validation passes and can connect to bybit
 
+Request
 ```http
 GET /scalper/config/validate
 ```
+Response
+```http
+Configuration Validation Successful
+```
 
 ### Places an order on bybit - Returns 200 if order was successful
+Request
 ```http
 POST /scalper
+Content-Type: application/json
+{
+    "bot": "",
+    "order": "",
+    "symbol": "",
+    "contracts": "",
+    "auth_key": "",
+    "leverage": ""
+}
 ```
+
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
 | `bot` | `string` | **Required**. Bot number you want the order to execute on |
@@ -51,28 +79,10 @@ POST /scalper
 | `contracts` | `int` | **Required**. Number of contracts |
 | `auth_key` | `string` | **Required**. Auth key set as part of configuration |
 | `leverage` | `string` | **Required**. Leverage to use for the order |
-
-```json
-{
-    "bot": "1",
-    "order": "buy",
-    "symbol": "BTCUSD",
-    "contracts": 1000,
-    "auth_key": "replace with auth key you configured",
-    "leverage": "1"
-}
-```
-
-## Installation
-
-Follow setup instructions below
-
-[Set Up Instructions](SETUP.md)
-
     
 ## Developing Locally
 
-* Install Firebase CLI
+* Install Firebase CLI https://firebase.google.com/docs/cli
 * Run Following commands
 ```shell
 mv ./functions/.runtimeconfig.json.tpl ./functions/.runtimeconfig.json.tpl
