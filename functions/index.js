@@ -9,7 +9,7 @@ admin.initializeApp({
 const appVersion = "1.0.4.2";
 
 let cancelSameSideOrders = false;
-let closePreviousPosition = true;
+let closePreviousPositions = true;
 
 const express = require('express');
 const app = express();
@@ -52,49 +52,49 @@ app.get('/config/validate', async (request, response, next) => {
 	try {
 		while (loop) {
 
-			let bot_number = 'bot_' + i;
+			let botNumber = 'bot_' + i;
 
 			// If bot number doesn't exist break we are done
-			if (!config[bot_number]) break;
+			if (!config[botNumber]) break;
 
-			if (config[bot_number]['api_key'] === undefined) {
+			if (config[botNumber]['api_key'] === undefined) {
 				const error = new Error('api_key not set with functions:config:set');
 				error.http_status = 500;
-				error.http_response = `Error ${bot_number} api_key not set`;
+				error.http_response = `Error ${botNumber} api_key not set`;
 				return next(error);
 			}
 
-			if (config[bot_number]['secret_key'] === undefined) {
-				const error = new Error(`${bot_number} secret_key not set with functions:config:set`);
+			if (config[botNumber]['secret_key'] === undefined) {
+				const error = new Error(`${botNumber} secret_key not set with functions:config:set`);
 				error.http_status = 500;
-				error.http_response = `Error ${bot_number} secret_key not set`;
+				error.http_response = `Error ${botNumber} secret_key not set`;
 				return next(error);
 			}
 
-			if (config[bot_number]['mode'] !== 'test' && config[bot_number]['mode'] !== 'live') {
-				const error = new Error(`${bot_number} mode must be set to either live or test with 
+			if (config[botNumber]['mode'] !== 'test' && config[botNumber]['mode'] !== 'live') {
+				const error = new Error(`${botNumber} mode must be set to either live or test with 
 				functions:config:set`);
 				error.http_status = 500;
-				error.http_response = `Error ${bot_number} mode must be set to either live or test`;
+				error.http_response = `Error ${botNumber} mode must be set to either live or test`;
 				return next(error);
 			}
 
 			// We are only testing connection to bybit hard coding to BTCUSD is fine here
-			const bybit_client  = GetByBitClient('BTCUSD', i);
+			const bybit_client  = getByBitClient('BTCUSD', i);
 
 			bybit_client.getApiKeyInfo().then((apiKeyInfoResponse) => {
-				functions.logger.debug(`${bot_number} connecting to bybit`);
+				functions.logger.debug(`${botNumber} connecting to bybit`);
 				if (apiKeyInfoResponse.ret_code !== 0) {
-					functions.logger.error(`${bot_number} connection failed ${JSON.stringify(apiKeyInfoResponse)}`);
-					functions.logger.error(`${bot_number} connection failed`);
-					throw new Error(`${bot_number} could not connect to bybit
+					functions.logger.error(`${botNumber} connection failed ${JSON.stringify(apiKeyInfoResponse)}`);
+					functions.logger.error(`${botNumber} connection failed`);
+					throw new Error(`${botNumber} could not connect to bybit
 					${JSON.stringify(apiKeyInfoResponse.ret_msg)}`);
 				} else {
-					functions.logger.debug(`${bot_number} connection successful`);
+					functions.logger.debug(`${botNumber} connection successful`);
 					return null;
 				}
 			}).catch((err) => {
-				throw new Error(`${bot_number} could not connect to bybit ${err}`);
+				throw new Error(`${botNumber} could not connect to bybit ${err}`);
 			})
 
 			i++;
@@ -110,7 +110,7 @@ app.get('/config/validate', async (request, response, next) => {
 });
 
 // Use auth for all other requests
-app.use(AuthValidator);
+app.use(authValidator);
 
 app.post('/', async (request, response, next) => {
 
@@ -127,7 +127,7 @@ app.post('/', async (request, response, next) => {
 
 		functions.logger.info(JSON.stringify(signalDetails));
 
-		await ValidateRequestBody(signalDetails).catch();
+		await validateRequestBody(signalDetails).catch();
 
 		const orderDetails =
 			{
@@ -138,19 +138,19 @@ app.post('/', async (request, response, next) => {
 				qty: signalDetails.contracts * signalDetails.leverage,
 			};
 
-		const bybit_client = GetByBitClient(signalDetails.symbol, signalDetails.bot);
+		const bybitClient = getByBitClient(signalDetails.symbol, signalDetails.bot);
 
 		//
 		// Strategy
 		//
 		if (signalDetails.order === "buy") {
 			cancelSameSideOrders = true;
-			closePreviousPosition = true;
+			closePreviousPositions = true;
 			functions.logger.info(`${appVersion} OPEN TRADE ACTION: ${signalDetails.symbol}`);
 			await createOrder({
 				response: response,
 				signalDetails: signalDetails,
-				client: bybit_client,
+				client: bybitClient,
 				orderDetails: orderDetails
 			});
 		}
@@ -159,16 +159,7 @@ app.post('/', async (request, response, next) => {
 		//
 		else if (signalDetails.order === "sell") {
 			functions.logger.info(`${appVersion} CLOSE TRADE ACTION: ${signalDetails.symbol}`);
-			await StopOrder({response: response, client: bybit_client, signalDetails: signalDetails});
-		}
-        //
-        // Bad conditions
-		//
-		else {
-			const error = new Error(`Order field in request body must be set to buy or sell ${JSON.stringify(signalDetails)}`);
-			error.http_status = 400;
-			error.http_response = 'Order field in request body must be set to buy or sell';
-			throw error;
+			await stopOrder({response: response, client: bybitClient, signalDetails: signalDetails});
 		}
 
 	} catch (error) {
@@ -179,15 +170,14 @@ app.post('/', async (request, response, next) => {
 
 // error handler middleware
 app.use((error, request, response, next) => {
-	functions.logger.error(error.message)
-	response.status(error.http_status || 500).send({
-		error: {
-			status: error.http_status || 500,
-			message: error.http_response || 'Internal Server Error',},
-	});
+	functions.logger.error(error.message);
+	response.status(error.http_response || 'Internal Server Error');
 });
 
-async function AuthValidator (request, response, next) {
+async function authValidator (request, response, next) {
+
+	functions.logger.debug('Running auth validator');
+
 	// TradingView does not support custom request headers adding basic auth key to request body to give basic
 	// security to the api
 	if (!functions.config().auth_key) {
@@ -209,7 +199,10 @@ async function AuthValidator (request, response, next) {
 
 }
 
-function GetByBitClient(symbol, bot_number) {
+function getByBitClient(symbol, bot_number) {
+
+	functions.logger.debug('Getting bybit client');
+
     // Use api and secret key for bot number passed in
     const config = functions.config();
     let bot_config_name = 'bot_' + bot_number;
@@ -232,12 +225,14 @@ function GetByBitClient(symbol, bot_number) {
 
 }
 
-async function ValidateRequestBody(signalDetails) {
+async function validateRequestBody(signalDetails) {
+
+	functions.logger.debug('Validating Request Body');
 
 	// Check that all required parameters are in request body
-	const body_parameters = ['bot', 'order', 'symbol', 'contracts', 'leverage'];
+	const bodyParameters = ['bot', 'order', 'symbol', 'contracts', 'leverage'];
 
-	for(const parameter of body_parameters) {
+	for(const parameter of bodyParameters) {
 		if (!signalDetails[parameter]) {
 			const error = new Error(`Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`);
 			error.http_status = 400;
@@ -246,17 +241,38 @@ async function ValidateRequestBody(signalDetails) {
 		}
 	}
 
+	if (signalDetails.leverage < 1 || signalDetails.leverage > 100) {
+		const error = new Error('Leverage field must be set between 1 and 100 in request body');
+		error.http_status = 400;
+		error.http_response = 'Leverage field must be set between 1 and 100 in request body';
+		throw error;
+	}
+
+	if (signalDetails.order !== 'buy' && signalDetails.order !== 'sell') {
+		const error = new Error('Order field must be set to either buy or sell');
+		error.http_status = 400;
+		error.http_response = 'Order field must be set to either buy or sell';
+		throw error;
+	}
+
+	if (signalDetails.contracts < 1) {
+		const error = new Error('Contracts field must be positive number');
+		error.http_status = 400;
+		error.http_response = 'Contracts field must be positive number';
+		throw error;
+	}
+
 }
 
-async function CancelAll(client, data)
-{
+async function cancelAll(client, data) {
 
-	functions.logger.info(`Canceling all orders ${JSON.stringify(data)}`);
+	functions.logger.debug(`Canceling all orders ${JSON.stringify(data)}`);
+
 	//
 	// Cancel ALL active orders
 	//
 
-	functions.logger.info(`Canceling all active orders ${JSON.stringify(data)}`);
+	functions.logger.debug(`Canceling all active orders ${JSON.stringify(data)}`);
 	await client.cancelAllActiveOrders(data).then((cancelAllActiveOrdersResponse) => {
 		if (cancelAllActiveOrdersResponse.ret_code !== 0 ) {
 			const error = new Error(`Error canceling all active orders ${cancelAllActiveOrdersResponse.ret_msg}`);
@@ -265,13 +281,13 @@ async function CancelAll(client, data)
 			throw error;
 		}
 		return true;
-	}).catch((error) =>
-	{
+	}).catch((error) => {
 		error.http_status = 500;
+		error.http_response = 'Error canceling all active orders';
 		throw error;
 	});
 
-	functions.logger.info(`Canceling all conditional orders ${JSON.stringify(data)}`);
+	functions.logger.debug(`Canceling all conditional orders ${JSON.stringify(data)}`);
 	await client.cancelAllConditionalOrders(data).then((cancelAllConditionalOrdersResponse) => {
 		if (cancelAllConditionalOrdersResponse.ret_code !== 0 ) {
 			const error = new Error(`Error canceling all conditional orders ${cancelAllConditionalOrdersResponse.ret_msg}`);
@@ -280,41 +296,39 @@ async function CancelAll(client, data)
 			throw error;
 		}
 		return true;
-	}).catch((error) =>
-	{
+	}).catch((error) => {
 		error.http_status = 500;
+		error.http_response = 'Error canceling all conditional orders';
 		throw error;
 	});
 
 }
 
-async function GetCurrentPosition(client, data)
-{
-	return await client.getPosition(data).then((positionsResponse) =>
-	{
+async function getCurrentPosition(client, data) {
+
+	functions.logger.debug(`Getting current position ${JSON.stringify(data)}`);
+	return await client.getPosition(data).then((positionsResponse) => {
+		functions.logger.debug(` Positions response ${JSON.stringify(positionsResponse)}`)
 		let currentPosition = null;
-		for (let i = 0; i < positionsResponse.result.length; ++i)
-		{
+		for (let i = 0; i < positionsResponse.result.length; ++i) {
 			const position = positionsResponse.result[i];
-			if (position.symbol === data.symbol)
-			{
+			if (position.symbol === data.symbol) {
 				currentPosition = position;
 				functions.logger.info(`${appVersion} GetCurrentPosition - Side: ${position.side} Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
 				return currentPosition;
 			}
 		}
 		return null;
-	}).catch((err) => 
-	{
-		functions.logger.error(`${appVersion} getPositions Error: ${err}`);
-		return null;
+	}).catch((error) => {
+		error.http_status = 500;
+		error.http_response = 'Error getting current position';
+		throw error;
 	});
 }
 
-async function ClosePreviousPosition(currentPosition, client)
-{
-	if (currentPosition.side !== "None")
-	{
+async function closePreviousPosition(currentPosition, client) {
+	if (currentPosition.side !== "None") {
+		functions.logger.debug('Closing previous position');
 		const closeOrderType = currentPosition.side === "Buy" ? "Sell" : "Buy";
 		const closingOrder =
 		{
@@ -325,97 +339,93 @@ async function ClosePreviousPosition(currentPosition, client)
 			qty: currentPosition.size,
 			close_on_trigger: true,
 		};
-		//console.log(`${appVersion} ClosePreviousPosition ${JSON.stringify(closingOrder)}`);
+
 		//
 		// Close Previous order
 		//
-		return await client.placeActiveOrder(closingOrder).then((closeActiveOrderResponse) =>
-		{
-			//console.log(`${appVersion} ClosePreviousPosition: closeActiveOrderResponse ${JSON.stringify(closeActiveOrderResponse)}`);
+		return await client.placeActiveOrder(closingOrder).then((closeActiveOrderResponse) => {
+			if (closeActiveOrderResponse.ret_code !== 0 ) {
+				const error = new Error(`Error placing order to close previous position ${closeActiveOrderResponse.ret_msg}`);
+				error.http_status = 500;
+				error.http_response = 'Error placing order to close previous position';
+				throw error;
+			}
 			functions.logger.info(`${appVersion} ClosePreviousPosition: ${closeActiveOrderResponse.symbol} ${closeActiveOrderResponse.side} ${closeActiveOrderResponse.price} ${closeActiveOrderResponse.qty}`)
 			return true;
-		}).catch((err) => 
-		{
-			functions.logger.error(`${appVersion} ClosePreviousPosition: placeActiveOrder Error: ${err}`)
-			return false;
+		}).catch((error) => {
+			error.http_status = 500;
+			error.http_response = 'Error placing order to close previous position';
+			throw error;
 		});
 	}
-	else
-	{
+	else {
 		return true;
 	}
 }
 
-async function PlaceNewOrder(response, client, orderDetails, conditionalOrderBuffer = null, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null)
-{
-	return await client.placeActiveOrder(orderDetails).then(async (placeActiveOrderResponse) =>
-	{
+async function placeNewOrder(response, client, orderDetails, conditionalOrderBuffer = null, tradingStopMultiplier = null,
+							 tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null) {
+	return await client.placeActiveOrder(orderDetails).then(async (placeActiveOrderResponse) => {
 		console.log(`${appVersion} PlaceNewOrder ${JSON.stringify(placeActiveOrderResponse)}`);
-		if (placeActiveOrderResponse.ret_code === 0)
-		{
-			if (conditionalOrderBuffer !== 0 || (tradingStopMultiplier === 0 && tradingStopActivationMultiplier === 0 && stopLossMargin === 0 && takeProfitMargin === 0))
-			{
+		if (placeActiveOrderResponse.ret_code === 0) {
+			if (conditionalOrderBuffer !== 0 || (tradingStopMultiplier === 0 && tradingStopActivationMultiplier === 0 && stopLossMargin === 0 && takeProfitMargin === 0)) {
 				return placeActiveOrderResponse;
 			}
-			else
-			{
+			else {
 				//setTimeout(() =>
 				//{
-				await SecureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+				await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
 				//}, 300);
 
 				return placeActiveOrderResponse;
 			}
 		}
 		return placeActiveOrderResponse;
-	}).catch((err) => 
-	{
-		functions.logger.error(`${appVersion} PlaceNewOrder: placeActiveOrder Error: ${err}`);
+	}).catch((error) => {
+		error.http_status = 500;
+		error.http_response = 'Place Active Order Error';
+		throw error;
 	});
 }
 
-async function StopOrder({ response, client, signalDetails })
-{
-	try
-	{
-		await CancelAll(client, { symbol: signalDetails.symbol });
+async function stopOrder({ response, client, signalDetails }) {
+	try {
+		await cancelAll(client, { symbol: signalDetails.symbol });
 
 		//
 		// Current Position
 		//
-		const currentPosition = await GetCurrentPosition(client, { symbol: signalDetails.symbol });
+		const currentPosition = await getCurrentPosition(client, { symbol: signalDetails.symbol });
 
 		//********************************************************************************************************** */
 		//
 		// Close Previous Order
 		//
 		//********************************************************************************************************** */
-		if (currentPosition)
-		{
-			const success = await ClosePreviousPosition(currentPosition, client);
+		if (currentPosition) {
+			const success = await closePreviousPosition(currentPosition, client);
 			//
 			// Return result
 			//
 			success ? response.status(200) : response.status(500);
-			response.send(`${appVersion} OK`);
+			response.status(200).send('Sell Order Placed Successfully');
 			return true;
 		}
-		else
-		{
-			response.status(200).send(`${appVersion} There's not current position open`);
+		else {
+			response.status(200).send(`There is no current position open`);
 		}
 	}
-	catch (err)
-	{
-		functions.logger.error(`${appVersion} stopOrder Error: ${err}`);
-		response.status(500).send(err);
-		return false;
+	catch (error) {
+		error.http_status = 500;
+		error.http_response = 'Stop order error';
+		throw error;
 	}
+
 }
 
 async function createOrder({ response, client, orderDetails, conditionalOrderBuffer = null, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null }) {
 
-	await CancelAll(client, { symbol: orderDetails.symbol });
+	await cancelAll(client, { symbol: orderDetails.symbol });
 
 	//
 	// Market Order
@@ -425,7 +435,7 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 	//
 	// Current Position
 	//
-	const currentPosition = await GetCurrentPosition(client, { symbol: orderDetails.symbol });
+	const currentPosition = await getCurrentPosition(client, { symbol: orderDetails.symbol });
 	if (currentPosition) {
 		functions.logger.info('There is a current position');
 		//********************************************************************************************************** */
@@ -433,8 +443,7 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 		// Reject SAME order
 		//
 		//********************************************************************************************************** */
-		if (cancelSameSideOrders === false && currentPosition.side === orderDetails.side)
-		{
+		if (cancelSameSideOrders === false && currentPosition.side === orderDetails.side) {
 			const msg = `${appVersion} SAME ALERT: ${currentPosition.side}`;
 
 			functions.logger.warn(msg);
@@ -446,9 +455,8 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 		// Close Previous Order
 		//
 		//********************************************************************************************************** */
-		if (closePreviousPosition)
-		{
-			await ClosePreviousPosition(currentPosition, client);
+		if (closePreviousPositions) {
+			await closePreviousPosition(currentPosition, client);
 		}
 
 	}
@@ -460,15 +468,15 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 	//********************************************************************************************************** */
 	functions.logger.debug(`Setting User leverage to ${orderDetails.leverage}`);
 	await client.setUserLeverage({ symbol: orderDetails.symbol, leverage: orderDetails.leverage }).then((changeLeverageResponse) => {
-		if (changeLeverageResponse.ret_code !== 0 ) {
+		functions.logger.debug(JSON.stringify(changeLeverageResponse))
+		if (changeLeverageResponse.ret_code !== 0 && changeLeverageResponse.ret_code !== 34036 ) {
 			const error = new Error(`Error changing leverage ${changeLeverageResponse.ret_msg}`);
 			error.http_status = 500;
 			error.http_response = 'Error changing leverage';
 			throw error;
 		}
 		return true;
-	}).catch((error) =>
-	{
+	}).catch((error) => {
 		error.http_status = 500;
 		throw error;
 	});
@@ -479,7 +487,7 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 	//
 	//********************************************************************************************************** */
 	functions.logger.debug(`Placing order for ${JSON.stringify(orderDetails)}`);
-	await PlaceNewOrder(response, client, orderDetails, conditionalOrderBuffer, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin).then((placeActiveOrderResponse) => {
+	await placeNewOrder(response, client, orderDetails, conditionalOrderBuffer, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin).then((placeActiveOrderResponse) => {
 		if (placeActiveOrderResponse.ret_code !== 0 ) {
 			const error = new Error(`Error placing order ${placeActiveOrderResponse.ret_msg}`);
 			error.http_status = 500;
@@ -487,45 +495,41 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 			throw error;
 		}
 		return true;
-	}).catch((error) =>
-	{
+	}).catch((error) => {
 		error.http_status = 500;
 		throw error;
 	});
 
+	response.status(200).send('Buy Order Placed Successfully');
+	return true;
+
 }
 
-async function SecureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null)
-{
-	try
-	{
-		const currentPosition = await GetCurrentPosition(client, { symbol: orderDetails.symbol });
-		if (currentPosition.side === "None")
-		{
+async function secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null) {
+	try {
+		const currentPosition = await getCurrentPosition(client, { symbol: orderDetails.symbol });
+		if (currentPosition.side === "None") {
 			console.log(`${appVersion} \n\n\ncurrentPosition.side: ${currentPosition.side} | Trying again!\n\n\n`);
 			//setTimeout(() =>
 			//{
-			await SecureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+			await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
 			//}, 100);
 		}
-		else
-		{
-			await SetTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+		else {
+			await setTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
 		}
 	}
-	catch (err)
-	{
-		functions.logger.error(`${appVersion} SecureTransaction Error: ${err}`);
-		response.status(500).send(err);
+	catch (error) {
+		error.http_status = 500;
+		error.http_response = 'Secure transaction error';
+		throw error;
 	}
 }
 
 let tradingStopTries = 0;
 const tradingStopTriesMax = 2;
-async function SetTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null)
-{
-	try
-	{
+async function setTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier = null, tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null) {
+	try {
 		// 35581*(1-(0.25/25))
 		/*
 		const bufferPrice = 10;
@@ -558,16 +562,15 @@ async function SetTradingStop(currentPosition, response, placeActiveOrderRespons
 		//
 		// Set STOP LOSS && TAKE PROFIT
 		//
-		await client.setTradingStop({ symbol: currentPosition.symbol, stop_loss: stopLossPrice, take_profit: takeProfitPrice }).then(tradingStopResponse =>
-		{
+		await client.setTradingStop({ symbol: currentPosition.symbol, stop_loss: stopLossPrice, take_profit: takeProfitPrice }).then(tradingStopResponse => {
 			functions.logger.info(`${appVersion} STOP LOSS: ${tradingStopResponse.result.stop_loss}`);
 			functions.logger.info(`${appVersion} TAKE PROFIT: ${tradingStopResponse.result.take_profit}`);
 			++tradingStopTries;
 			return true;
-		}).catch((err) => 
-		{
-			functions.logger.error(`${appVersion} setTradingStop - STOP LOSS - Error: ${err}`);
-			return false;
+		}).catch((error) => {
+			error.http_status = 500;
+			error.http_response = 'Set Trading Stop Error';
+			throw error;
 		});
 		//if (tradingStopTries >= tradingStopTriesMax || (tradingStopMultiplier === 0 && tradingStopActivationMultiplier === 0))
 		//
@@ -611,10 +614,9 @@ async function SetTradingStop(currentPosition, response, placeActiveOrderRespons
 		*/
 		return true;
 	}
-	catch (err)
-	{
-		functions.logger.error(`${appVersion} SetTradingStop Error: ${err}`);
-		response.status(500).send(err);
-		return false;
+	catch (error) {
+		error.http_status = 500;
+		error.http_response = 'Set Trading Stop Error';
+		throw error;
 	}
 }
