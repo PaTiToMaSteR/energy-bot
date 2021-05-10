@@ -374,8 +374,8 @@ async function placeNewOrder(response, client, orderDetails, conditionalOrderBuf
 				return placeActiveOrderResponse;
 			}
 			else {
-				await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier,
-					tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+				//await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier,
+				//	tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
 				return placeActiveOrderResponse;
 			}
 		}
@@ -481,124 +481,124 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 
 }
 
-async function secureTransaction(response, placeActiveOrderResponse, client, orderDetails,
-								 tradingStopMultiplier = null, tradingStopActivationMultiplier = null,
-								 stopLossMargin = null, takeProfitMargin = null) {
-	try {
-		const currentPosition = await getCurrentPosition(client, { symbol: orderDetails.symbol });
-		if (currentPosition.side === "None") {
-			console.log(`${appVersion} \n\n\ncurrentPosition.side: ${currentPosition.side} | Trying again!\n\n\n`);
-			//setTimeout(() =>
-			//{
-			await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier,
-				tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
-			//}, 100);
-		}
-		else {
-			await setTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails,
-				tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
-		}
-	}
-	catch (error) {
-		error.http_status = 500;
-		error.http_response = 'Secure transaction error';
-		throw error;
-	}
-}
+// async function secureTransaction(response, placeActiveOrderResponse, client, orderDetails,
+// 								 tradingStopMultiplier = null, tradingStopActivationMultiplier = null,
+// 								 stopLossMargin = null, takeProfitMargin = null) {
+// 	try {
+// 		const currentPosition = await getCurrentPosition(client, { symbol: orderDetails.symbol });
+// 		if (currentPosition.side === "None") {
+// 			console.log(`${appVersion} \n\n\ncurrentPosition.side: ${currentPosition.side} | Trying again!\n\n\n`);
+// 			//setTimeout(() =>
+// 			//{
+// 			await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier,
+// 				tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+// 			//}, 100);
+// 		}
+// 		else {
+// 			await setTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails,
+// 				tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+// 		}
+// 	}
+// 	catch (error) {
+// 		error.http_status = 500;
+// 		error.http_response = 'Secure transaction error';
+// 		throw error;
+// 	}
+// }
 
-let tradingStopTries = 0;
-const tradingStopTriesMax = 2;
-async function setTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails,
-							  tradingStopMultiplier = null, tradingStopActivationMultiplier = null,
-							  stopLossMargin = null, takeProfitMargin = null) {
-	try {
-		// 35581*(1-(0.25/25))
-		/*
-		const bufferPrice = 10;
-		const minPriceUp = Math.trunc(currentPosition.side === "Buy" ? currentPosition.entry_price + bufferPrice : currentPosition.entry_price - bufferPrice);
-		const minPriceDown = Math.trunc(currentPosition.side === "Buy" ? currentPosition.entry_price - bufferPrice : currentPosition.entry_price + bufferPrice);
-		*/
-		//
-		// Calculate the price difference based on leverage
-		//
-		//const tradingStopPrice = Math.trunc(currentPosition.entry_price * tradingStopMultiplier);
-		//const activationDiff = currentPosition.entry_price * tradingStopActivationMultiplier;
-		const SL_multiplier = (stopLossMargin / orderDetails.leverage);
-		const TP_multiplier = (takeProfitMargin / orderDetails.leverage);
-
-		const stopLossCalc = currentPosition.entry_price * (currentPosition.side === "Sell" ? 1 + SL_multiplier : 1 - SL_multiplier);
-		const takeProfitCalc = currentPosition.entry_price * (currentPosition.side === "Buy" ? 1 + TP_multiplier : 1 - TP_multiplier);
-		//
-		// Setup the strategy
-		//
-		const stopLossPrice = Math.trunc(stopLossCalc);
-		const takeProfitPrice = Math.trunc(takeProfitCalc);
-		console.log(`\n\n${appVersion} action: ${currentPosition.side}\n${appVersion} entry_price: ${currentPosition.entry_price}\n${appVersion} StopLoss -> Multiplier: ${stopLossMargin} -> price: ${stopLossPrice}\n${appVersion} TakeProfit -> Multiplier: ${takeProfitMargin} -> price: ${takeProfitPrice}\n\n`);
-		/*
-		const activationPrice = Math.max(minPriceUp,
-			Number.isInteger(tradingStopActivationMultiplier) ? currentPosition.entry_price + tradingStopActivationMultiplier
-				: Math.trunc(currentPosition.side === "Buy" ? currentPosition.entry_price + activationDiff : currentPosition.entry_price - activationDiff)
-		);
-		console.log(`${appVersion} \n\naction: ${currentPosition.side}\nentry_price: ${currentPosition.entry_price}\nminPriceUp: ${minPriceUp}\nminPriceDown: ${minPriceDown}\nTradingStop -> Multiplier: ${tradingStopMultiplier} -> price: ${tradingStopPrice}\nTradingStopActivation -> Multiplier: ${tradingStopActivationMultiplier} -> ${activationPrice} -> diff: ${activationDiff}\nStopLoss -> Multiplier: ${stopLossMargin} -> diff: ${stopLossDiff} -> price: ${stopLossPrice}\nTakeProfit -> Multiplier: ${takeProfitMargin} -> diff: ${takeProfitDiff} -> price: ${takeProfitPrice}\n\n`);
-		*/
-		//
-		// Set STOP LOSS && TAKE PROFIT
-		//
-		await client.setTradingStop({ symbol: currentPosition.symbol, stop_loss: stopLossPrice, take_profit: takeProfitPrice }).then(tradingStopResponse => {
-			functions.logger.info(`${appVersion} STOP LOSS: ${tradingStopResponse.result.stop_loss}`);
-			functions.logger.info(`${appVersion} TAKE PROFIT: ${tradingStopResponse.result.take_profit}`);
-			++tradingStopTries;
-			return true;
-		}).catch((error) => {
-			error.http_status = 500;
-			error.http_response = 'Set Trading Stop Error';
-			throw error;
-		});
-		//if (tradingStopTries >= tradingStopTriesMax || (tradingStopMultiplier === 0 && tradingStopActivationMultiplier === 0))
-		//
-		// Trailing TAKE PROFIT
-		//
-		/*
-		else
-		{
-			//
-			// Trading STOP
-			//
-			client.setTradingStop({ symbol: currentPosition.symbol, trailing_stop: tradingStopPrice, new_trailing_active: activationPrice }).then(setTradingStopResponse =>
-			{
-				console.log(`${appVersion} setTradingStop ${JSON.stringify(setTradingStopResponse)}`);
-				if (setTradingStopResponse.ret_code !== 0)
-				{
-					functions.logger.error(`${appVersion} ${setTradingStopResponse}`);
-					console.log(`${appVersion} \n\n\ncurrentPosition.side: ${currentPosition.side} | Trying again!\n\n\n`);
-					//const captureBuffer = 0.01;
-					//tradingStopMultiplier = currentPosition.side === "Buy" ? tradingStopMultiplier + captureBuffer : tradingStopMultiplier - captureBuffer;
-					setTimeout(() =>
-					{
-						SetTradingStop(currentPosition, response, placeActiveOrderResponse, client, SYMBOL, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
-					}, 1000);
-				}
-				else
-				{
-					//
-					// Return result
-					//
-					placeActiveOrderResponse.ret_code !== 0 ? response.status(500) : response.status(200);
-					response.send(placeActiveOrderResponse);
-				}
-				return true;
-			}).catch((err) => 
-			{
-				functions.logger.error(`${appVersion} setTradingStop Error: ${err}`);
-				response.status(500).send(err);
-			});
-		}
-		*/
-		return true;
-	}
-	catch (error) {
-		error.http_status = 500;
-		error.http_response = 'Set Trading Stop Error';
-		throw error;
-	}
-}
+// let tradingStopTries = 0;
+// const tradingStopTriesMax = 2;
+// async function setTradingStop(currentPosition, response, placeActiveOrderResponse, client, orderDetails,
+// 							  tradingStopMultiplier = null, tradingStopActivationMultiplier = null,
+// 							  stopLossMargin = null, takeProfitMargin = null) {
+// 	try {
+// 		// 35581*(1-(0.25/25))
+// 		/*
+// 		const bufferPrice = 10;
+// 		const minPriceUp = Math.trunc(currentPosition.side === "Buy" ? currentPosition.entry_price + bufferPrice : currentPosition.entry_price - bufferPrice);
+// 		const minPriceDown = Math.trunc(currentPosition.side === "Buy" ? currentPosition.entry_price - bufferPrice : currentPosition.entry_price + bufferPrice);
+// 		*/
+// 		//
+// 		// Calculate the price difference based on leverage
+// 		//
+// 		//const tradingStopPrice = Math.trunc(currentPosition.entry_price * tradingStopMultiplier);
+// 		//const activationDiff = currentPosition.entry_price * tradingStopActivationMultiplier;
+// 		const SL_multiplier = (stopLossMargin / orderDetails.leverage);
+// 		const TP_multiplier = (takeProfitMargin / orderDetails.leverage);
+//
+// 		const stopLossCalc = currentPosition.entry_price * (currentPosition.side === "Sell" ? 1 + SL_multiplier : 1 - SL_multiplier);
+// 		const takeProfitCalc = currentPosition.entry_price * (currentPosition.side === "Buy" ? 1 + TP_multiplier : 1 - TP_multiplier);
+// 		//
+// 		// Setup the strategy
+// 		//
+// 		const stopLossPrice = Math.trunc(stopLossCalc);
+// 		const takeProfitPrice = Math.trunc(takeProfitCalc);
+// 		console.log(`\n\n${appVersion} action: ${currentPosition.side}\n${appVersion} entry_price: ${currentPosition.entry_price}\n${appVersion} StopLoss -> Multiplier: ${stopLossMargin} -> price: ${stopLossPrice}\n${appVersion} TakeProfit -> Multiplier: ${takeProfitMargin} -> price: ${takeProfitPrice}\n\n`);
+// 		/*
+// 		const activationPrice = Math.max(minPriceUp,
+// 			Number.isInteger(tradingStopActivationMultiplier) ? currentPosition.entry_price + tradingStopActivationMultiplier
+// 				: Math.trunc(currentPosition.side === "Buy" ? currentPosition.entry_price + activationDiff : currentPosition.entry_price - activationDiff)
+// 		);
+// 		console.log(`${appVersion} \n\naction: ${currentPosition.side}\nentry_price: ${currentPosition.entry_price}\nminPriceUp: ${minPriceUp}\nminPriceDown: ${minPriceDown}\nTradingStop -> Multiplier: ${tradingStopMultiplier} -> price: ${tradingStopPrice}\nTradingStopActivation -> Multiplier: ${tradingStopActivationMultiplier} -> ${activationPrice} -> diff: ${activationDiff}\nStopLoss -> Multiplier: ${stopLossMargin} -> diff: ${stopLossDiff} -> price: ${stopLossPrice}\nTakeProfit -> Multiplier: ${takeProfitMargin} -> diff: ${takeProfitDiff} -> price: ${takeProfitPrice}\n\n`);
+// 		*/
+// 		//
+// 		// Set STOP LOSS && TAKE PROFIT
+// 		//
+// 		await client.setTradingStop({ symbol: currentPosition.symbol, stop_loss: stopLossPrice, take_profit: takeProfitPrice }).then(tradingStopResponse => {
+// 			functions.logger.info(`${appVersion} STOP LOSS: ${tradingStopResponse.result.stop_loss}`);
+// 			functions.logger.info(`${appVersion} TAKE PROFIT: ${tradingStopResponse.result.take_profit}`);
+// 			++tradingStopTries;
+// 			return true;
+// 		}).catch((error) => {
+// 			error.http_status = 500;
+// 			error.http_response = 'Set Trading Stop Error';
+// 			throw error;
+// 		});
+// 		//if (tradingStopTries >= tradingStopTriesMax || (tradingStopMultiplier === 0 && tradingStopActivationMultiplier === 0))
+// 		//
+// 		// Trailing TAKE PROFIT
+// 		//
+// 		/*
+// 		else
+// 		{
+// 			//
+// 			// Trading STOP
+// 			//
+// 			client.setTradingStop({ symbol: currentPosition.symbol, trailing_stop: tradingStopPrice, new_trailing_active: activationPrice }).then(setTradingStopResponse =>
+// 			{
+// 				console.log(`${appVersion} setTradingStop ${JSON.stringify(setTradingStopResponse)}`);
+// 				if (setTradingStopResponse.ret_code !== 0)
+// 				{
+// 					functions.logger.error(`${appVersion} ${setTradingStopResponse}`);
+// 					console.log(`${appVersion} \n\n\ncurrentPosition.side: ${currentPosition.side} | Trying again!\n\n\n`);
+// 					//const captureBuffer = 0.01;
+// 					//tradingStopMultiplier = currentPosition.side === "Buy" ? tradingStopMultiplier + captureBuffer : tradingStopMultiplier - captureBuffer;
+// 					setTimeout(() =>
+// 					{
+// 						SetTradingStop(currentPosition, response, placeActiveOrderResponse, client, SYMBOL, orderDetails, tradingStopMultiplier, tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+// 					}, 1000);
+// 				}
+// 				else
+// 				{
+// 					//
+// 					// Return result
+// 					//
+// 					placeActiveOrderResponse.ret_code !== 0 ? response.status(500) : response.status(200);
+// 					response.send(placeActiveOrderResponse);
+// 				}
+// 				return true;
+// 			}).catch((err) =>
+// 			{
+// 				functions.logger.error(`${appVersion} setTradingStop Error: ${err}`);
+// 				response.status(500).send(err);
+// 			});
+// 		}
+// 		*/
+// 		return true;
+// 	}
+// 	catch (error) {
+// 		error.http_status = 500;
+// 		error.http_response = 'Set Trading Stop Error';
+// 		throw error;
+// 	}
+// }
