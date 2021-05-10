@@ -72,6 +72,6 @@ application in google firebase. Steps could be slightly different if you have an
         * If it does not you missed a step above or are using the wrong URL
     * In your web browser of choice go to https://${url}/scalper/config/validate it should display 
       *Configuration Validation Successful*
-    ![img.png](doc-imgs/config-validate-response.png)
+    ![config-validate-response.png](doc-imgs/config-validate-response.png)
         * If it does not there is a configuration issue look at the output it should tell you want is wrong
 7. Step up complete you can now set up trading view alerts to energy-bot!
