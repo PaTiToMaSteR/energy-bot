@@ -59,7 +59,10 @@ application in google firebase. Steps could be slightly different if you have an
     ```shell
     cd %USERPROFILE% # for windows
     cd $HOME # for mac os
+    # Note if git is not found run the 2nd command
     git clone https://github.com/PaTiToMaSteR/energy-bot.git
+    # This one is only needed if first one does not work 
+    "%ProgramFiles%\Git\cmd\git.exe" clone https://github.com/PaTiToMaSteR/energy-bot.git
     cd energy-bot
     firebase use --add
     # Select choice that begins with energy-bot using arrows on keyboard and hit enter key
