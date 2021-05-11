@@ -136,7 +136,9 @@ app.post('/', async (request, response, next) => {
 				symbol: signalDetails.symbol,
 				leverage: signalDetails.leverage,
 				time_in_force: "ImmediateOrCancel",
-				qty: signalDetails.contracts * signalDetails.leverage,
+				reduce_only: false,
+				close_on_trigger: false,
+				qty: signalDetails.contracts * signalDetails.leverage
 			};
 
 		const bybitClient = getByBitClient(signalDetails.symbol, signalDetails.bot);
@@ -256,7 +258,7 @@ async function validateRequestBody(signalDetails) {
 		throw error;
 	}
 
-	if (signalDetails.contracts < 1) {
+	if (signalDetails.contracts < 0) {
 		const error = new Error('Contracts field must be positive number');
 		error.http_status = 400;
 		error.http_response = 'Contracts field must be positive number';
@@ -312,7 +314,15 @@ async function getCurrentPosition(client, data) {
 		functions.logger.debug(` Positions response ${JSON.stringify(positionsResponse)}`)
 		let currentPosition = null;
 		for (let i = 0; i < positionsResponse.result.length; ++i) {
-			const position = positionsResponse.result[i].data;
+			// API response is slightly different between Inverse and USDT
+			let position;
+			if (data.symbol.endsWith("USDT")) {
+				position = positionsResponse.result[i];
+			} else {
+				position = positionsResponse.result[i].data;
+			}
+
+			//const position = positionsResponse.result[i]
 			if (position.symbol === data.symbol) {
 				currentPosition = position;
 				functions.logger.debug(`Current position - Side: ${position.side} Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
@@ -337,6 +347,7 @@ async function closePreviousPosition(currentPosition, client) {
 			symbol: currentPosition.symbol,
 			order_type: "Market",	// Limit, for Buy lower than current market price triggers, for Sell higher than market price triggers
 			time_in_force: "ImmediateOrCancel",
+			reduce_only: true,
 			qty: currentPosition.size,
 			close_on_trigger: true,
 		};
@@ -436,7 +447,8 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 
 	// Update Leverage
 	functions.logger.debug(`Setting User leverage to ${orderDetails.leverage}`);
-	await client.setUserLeverage({ symbol: orderDetails.symbol, leverage: orderDetails.leverage }).then((changeLeverageResponse) => {
+	await client.setUserLeverage(
+		{ symbol: orderDetails.symbol, buy_leverage: orderDetails.leverage, sell_leverage: orderDetails.leverage }).then((changeLeverageResponse) => {
 		functions.logger.debug(JSON.stringify(changeLeverageResponse))
 		if (changeLeverageResponse.ret_code !== 0 && changeLeverageResponse.ret_code !== 34036 ) {
 			const error = new Error(`Error changing leverage ${changeLeverageResponse.ret_msg}`);
