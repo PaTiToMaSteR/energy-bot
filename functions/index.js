@@ -172,7 +172,7 @@ app.post('/', async (request, response, next) => {
 // error handler middleware
 app.use((error, request, response, next) => {
 	functions.logger.error(error.message);
-	response.status(error.http_response || 'Internal Server Error');
+	response.status(error.http_response || 'Internal Server Error').send(error.http_status || 500);
 });
 
 async function authValidator (request, response, next) {
