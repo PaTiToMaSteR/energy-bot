@@ -67,10 +67,13 @@ application in google firebase. Steps could be slightly different if you have an
     firebase functions:config:set bot_1.api_key="REPLACE_WITH_BYBIT_API_KEY_FROM_STEP_4"
     firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY_FROM_STEP_4"
     firebase functions:config:set bot_1.mode="'test' for testnet bybit or 'live' for normal bybit"
-    firebase functions:config:set auth.key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
     # NOTE you can repeat the bot config keys to support multiple bots by adding bot_2.api_key bot_2.secret_key bot_2.mode
     # This can be repeated any number of times but must go in number order i.e. you cannot add bot_4.api_key without
     # having a bot 1, 2, and 3 configured first
+    firebase functions:config:set auth.key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
+    # NOTE recommend the auth key be at least 30 characters long
+    # that is what protects your energy-bot setup by random people on the internet   
+    # save the value you set you will need it when configuring Trading View
     cd functions
     npm install
     cd ../
