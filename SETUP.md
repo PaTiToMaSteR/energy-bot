@@ -72,7 +72,7 @@ application in google firebase. Steps could be slightly different if you have an
     # having a bot 1, 2, and 3 configured first
     firebase functions:config:set auth.key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
     # NOTE recommend the auth key be at least 30 characters long
-    # that is what protects your energy-bot setup by random people on the internet   
+    # that is what protects your energy-bot setup by random people on the internet think of it like a password
     # save the value you set you will need it when configuring Trading View
     cd functions
     npm install
