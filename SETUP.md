@@ -27,7 +27,7 @@ application in google firebase. Steps could be slightly different if you have an
     ![charge-warning.png](doc-imgs/charge-warning.png)
     * Click *Continue* button
     ![create-new-billing-account.png](doc-imgs/create-new-billing-account.png)
-3. Install Firebase CLI (This is a command line tool that is used to interact with google firebase platform and preform
+3. Install Firebase CLI (This is a command line tool that is used to interact with google firebase platform and perform
    energy bot deployment)
     * Following instructions for your OS here https://firebase.google.com/docs/cli
 4. Generate ByBit API keys (NOTE API KEYS ARE ONLY GOOD FOR 90 DAYS REMEMBER TO ROTATE THEM BEFORE THEY EXPIRE)
@@ -52,7 +52,7 @@ application in google firebase. Steps could be slightly different if you have an
 5. Deploy Bot to Firebase by running the following commands in your terminal of choice
     * Windows
         * Open Program *firebase-tools-instamt-win.exe*
-        ![firebase-tools-istamt-win.png](doc-imgs/firebase-tools-istamt-win.png)
+        ![firebase-tools-istamt-win.png](doc-imgs/firebase-tools-instant-win.png)
     * Mac OS
        * Open Program *Terminal*
     * Run the following commands in firebase cli
