@@ -51,8 +51,8 @@ application in google firebase. Steps could be slightly different if you have an
         ![bybit-key-sucessfully-added.png](doc-imgs/bybit-key-sucessfully-added.png)
 5. Deploy Bot to Firebase by running the following commands in your terminal of choice
     * Windows
-        * Open Program *firebase-tools-instamt-win.exe*
-        ![firebase-tools-istamt-win.png](doc-imgs/firebase-tools-instant-win.png)
+        * Open Program *firebase-tools-instant-win.exe*
+        ![firebase-tools-instant-win.png](doc-imgs/firebase-tools-instant-win.png)
     * Mac OS
        * Open Program *Terminal*
     * Run the following commands in firebase cli
