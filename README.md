@@ -88,6 +88,9 @@ Remember to always test upgrades in testnet before using live!
 ```shell
 cd energy-bot
 git pull
+cd functions
+npm install
+cd ../
 firebase deploy
 ```
 
@@ -102,7 +105,7 @@ cd energy-bot
 firebase functions:config:set bot_1.api_key="REPLACE_WITH_BYBIT_API_KEY"
 firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY"
 firebase functions:config:set bot_1.mode="'test' for testnet bybit or 'live' for normal bybit"
-firebase functions:config:set auth_key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
+firebase functions:config:set auth.key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
 # NOTE you can repeat the bot config keys to support multiple bots by adding bot_2.api_key bot_2.secret_key bot_2.mode
 # This can be repeated any number of times but must go in number order i.e. you cannot add bot_4.api_key without
 # having a bot 1, 2, and 3 configured first

@@ -30,10 +30,10 @@ app.get('/config/validate', async (request, response, next) => {
 
 	const config = functions.config();
 
-    if (config.auth_key === undefined || config.auth_key === '') {
-    	const error = new Error('auth_key config key not set with functions:config:set');
+    if (config.auth.key === undefined || config.auth.key === '') {
+    	const error = new Error('auth.key config key not set with functions:config:set');
 		error.http_status = 500;
-		error.http_response = 'Error auth_key config key not set';
+		error.http_response = 'Error auth.key config key not set';
 		return next(error);
     }
 
@@ -181,15 +181,15 @@ async function authValidator (request, response, next) {
 
 	// TradingView does not support custom request headers adding basic auth key to request body to give basic
 	// security to the api
-	if (!functions.config().auth_key) {
-		const error = new Error('auth_key config key not found');
+	if (!functions.config().auth.key) {
+		const error = new Error('auth.key config key not found');
 		error.http_status = 403;
 		error.http_response = 'Unauthorized';
 		return next(error);
 	}
 
-	if (request.body.auth_key === functions.config().auth_key) {
-		functions.logger.info(`auth_key in request body valid`);
+	if (request.body.auth_key === functions.config().auth.key) {
+		functions.logger.info(`auth.key in request body valid`);
 		return next();
 	} else {
 		const error = new Error('auth_key in request body not valid or not provided');

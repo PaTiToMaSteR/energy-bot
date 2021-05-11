@@ -9,5 +9,7 @@
     "secret_key": "REPLACE_WITH_BYBIT_SECRET_KEY",
     "mode": "test"
   },
-  "auth_key": "REPLACE_WITH_RANDOM_STRING"
+  "auth": {
+    "key": "REPLACE_WITH_RANDOM_STRING"
+  }
 }

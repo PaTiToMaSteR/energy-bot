@@ -50,27 +50,45 @@ application in google firebase. Steps could be slightly different if you have an
         * Once you have copied them down Click *Understood*
         ![bybit-key-sucessfully-added.png](doc-imgs/bybit-key-sucessfully-added.png)
 5. Deploy Bot to Firebase by running the following commands in your terminal of choice
+    * Windows
+        * Open Program *firebase-tools-instamt-win.exe*
+        ![firebase-tools-istamt-win.png](doc-imgs/firebase-tools-istamt-win.png)
+    * Mac OS
+       * Open Program *Terminal*
+    * Run the following commands in firebase cli
     ```shell
+    cd %USERPROFILE% # for windows
+    cd $HOME # for mac os
     git clone https://github.com/PaTiToMaSteR/energy-bot.git
     cd energy-bot
-    firebase login
-    firebase use --add 
-    # Select choice that begains with energy-bot and hit enter key, 
+    firebase use --add
+    # Select choice that begins with energy-bot using arrows on keyboard and hit enter key
     # When prompted for alias enter 'live' and hit enter key
     firebase functions:config:set bot_1.api_key="REPLACE_WITH_BYBIT_API_KEY_FROM_STEP_4"
     firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY_FROM_STEP_4"
     firebase functions:config:set bot_1.mode="'test' for testnet bybit or 'live' for normal bybit"
-    firebase functions:config:set auth_key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
+    firebase functions:config:set auth.key="REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"
     # NOTE you can repeat the bot config keys to support multiple bots by adding bot_2.api_key bot_2.secret_key bot_2.mode
     # This can be repeated any number of times but must go in number order i.e. you cannot add bot_4.api_key without
     # having a bot 1, 2, and 3 configured first
+    cd functions
+    npm install
+    cd ../
     firebase deploy
     ```
 6. Confirm your bot loads (TODO document how to get url for specific user deployment)
-    * In your web browser of choice go to https://${url}/scalper/up it should display *I'm live*
+    * In your web browser of choice go to https://console.firebase.google.com
+    * Click *energy-bot*
+    ![firebase-console-main.png](doc-imgs/firebase-console-main.png)
+    * Click *Functions* on left side
+    ![firebase-console-home.png](doc-imgs/firebase-console-home.png)
+    * Grab Base URL under *Trigger* Column
+        * Should be europe-west1-energy-bot-SOMENUMBER-HERE.cloudfunctions.net
+        ![firebase-functions-dashboard.png](doc-imgs/firebase-functions-dashboard.png)
+    * In your web browser of choice go to https://REPLACE_WITH_BASE_URL/scalper/up it should display *I'm alive*
     ![up-response.png](doc-imgs/up-response.png)
         * If it does not you missed a step above or are using the wrong URL
-    * In your web browser of choice go to https://${url}/scalper/config/validate it should display 
+    * In your web browser of choice go to https://REPLACE_WITH_BASE_URL/scalper/config/validate it should display 
       *Configuration Validation Successful*
     ![config-validate-response.png](doc-imgs/config-validate-response.png)
         * If it does not there is a configuration issue look at the output it should tell you want is wrong
