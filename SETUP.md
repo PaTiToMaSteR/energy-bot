@@ -86,7 +86,7 @@ application in google firebase. Steps could be slightly different if you have an
     * In your web browser of choice go to https://console.firebase.google.com
     * Click *energy-bot*
     ![firebase-console-main.png](doc-imgs/firebase-console-main.png)
-    * Click *Functions* on left side
+    * Click *Build* a menu will appear then Click *Functions* on left side
     ![firebase-console-home.png](doc-imgs/firebase-console-home.png)
     * Grab Base URL under *Trigger* Column
         * Should be europe-west1-energy-bot-SOMENUMBER-HERE.cloudfunctions.net
