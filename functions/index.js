@@ -130,6 +130,16 @@ app.post('/', async (request, response, next) => {
 
 		await validateRequestBody(signalDetails).catch();
 
+		// Trading view strategies send contracts in the opposite of what Bybit API requires
+		// need to convert inverse to USD and Perpetual to amount in the coin
+		// Amount is after leverage for a total order amount
+		let totalOrderQty;
+		if (signalDetails.order_price) {
+			totalOrderQty = signalDetails.contracts * signalDetails.order_price * signalDetails.leverage;
+		} else {
+			totalOrderQty = signalDetails.contracts * signalDetails.leverage;
+		}
+
 		const orderDetails =
 			{
 				side: signalDetails.order === "buy" ? "Buy" : "Sell",	// tradingview strategy fix for bybit
@@ -138,7 +148,7 @@ app.post('/', async (request, response, next) => {
 				time_in_force: "ImmediateOrCancel",
 				reduce_only: false,
 				close_on_trigger: false,
-				qty: signalDetails.contracts * signalDetails.leverage
+				qty: totalOrderQty
 			};
 
 		const bybitClient = getByBitClient(signalDetails.symbol, signalDetails.bot);
@@ -174,7 +184,7 @@ app.post('/', async (request, response, next) => {
 // error handler middleware
 app.use((error, request, response, next) => {
 	functions.logger.error(error.message);
-	response.status(error.http_response || 'Internal Server Error').send(error.http_status || 500);
+	response.status(error.http_status || 500).send(error.http_response || 'Internal Server Error');
 });
 
 async function authValidator (request, response, next) {
@@ -262,6 +272,13 @@ async function validateRequestBody(signalDetails) {
 		const error = new Error('Contracts field must be positive number');
 		error.http_status = 400;
 		error.http_response = 'Contracts field must be positive number';
+		throw error;
+	}
+
+	if (signalDetails.order_price && signalDetails.order_price < 0) {
+		const error = new Error('order_price field must be positive number');
+		error.http_status = 400;
+		error.http_response = 'order_price field must be positive number';
 		throw error;
 	}
 

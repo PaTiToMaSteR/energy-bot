@@ -78,6 +78,7 @@ Content-Type: application/json
 | `order` | `string` | **Required**. Order type sell or buy |
 | `symbol` | `string` | **Required**. Symbol order should be placed |
 | `contracts` | `int` | **Required**. Number of contracts |
+| `order_price` | `int` | **Optional**. Entry price of order (if set total order is contracts * order_price * leverage) |
 | `auth_key` | `string` | **Required**. Auth key set as part of configuration |
 | `leverage` | `string` | **Required**. Leverage to use for the order |
 
