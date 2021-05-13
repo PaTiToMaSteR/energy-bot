@@ -112,6 +112,8 @@ You only need to run the functions:config:set commands for the values you want t
 Deploy command must always be run for any config values to take
 
 ```shell
+cd %USERPROFILE% # for windows
+cd $HOME # for mac os
 cd energy-bot
 firebase functions:config:set bot_1.api_key="REPLACE_WITH_BYBIT_API_KEY"
 firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY"
