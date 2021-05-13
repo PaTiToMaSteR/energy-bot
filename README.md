@@ -86,9 +86,19 @@ Content-Type: application/json
 
 Remember to always test upgrades in testnet before using live!
 
+* Windows
+    * Open Program *firebase-tools-instant-win.exe*
+* Mac OS
+   * Open Program *Terminal*
+* Run the following commands in firebase cli
 ```shell
+cd %USERPROFILE% # for windows
+cd $HOME # for mac os
 cd energy-bot
-git pull
+# Note if git is not found run the 2nd command
+git pull https://github.com/PaTiToMaSteR/energy-bot.git
+# This one is only needed if first one does not work 
+"%ProgramFiles%\Git\cmd\git.exe" pull https://github.com/PaTiToMaSteR/energy-bot.git
 cd functions
 npm install
 cd ../

@@ -82,7 +82,7 @@ application in google firebase. Steps could be slightly different if you have an
     cd ../
     firebase deploy
     ```
-6. Confirm your bot loads (TODO document how to get url for specific user deployment)
+6. Confirm your bot loads
     * In your web browser of choice go to https://console.firebase.google.com
     * Click *energy-bot*
     ![firebase-console-main.png](doc-imgs/firebase-console-main.png)
