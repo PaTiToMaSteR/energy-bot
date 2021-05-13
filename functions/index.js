@@ -218,12 +218,12 @@ async function getTotalOrderQty(signalDetails) {
 			error.http_response = `order_price must be in request body for inverse contracts`;
 			throw error;
 		} else {
-			totalOrderQty = signalDetails.contracts / signalDetails.leverage * signalDetails.order_price ;
+			totalOrderQty = signalDetails.contracts * signalDetails.order_price ;
 			return totalOrderQty;
 		}
 
 	} else {
-		totalOrderQty = signalDetails.contracts / signalDetails.leverage;
+		totalOrderQty = signalDetails.contracts;
 		return totalOrderQty;
 	}
 
