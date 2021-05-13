@@ -206,9 +206,6 @@ async function authValidator (request, response, next) {
 
 async function getTotalOrderQty(signalDetails) {
 
-	// Treat contracts coming from trading view as post leverage
-	// Convert them back to position margin for placing order
-
 	// If Inverse contracts convert to USD for bybit api trading view sends it as coin amount
 	let totalOrderQty;
 	if (signalDetails.symbol.endsWith('USD')) {

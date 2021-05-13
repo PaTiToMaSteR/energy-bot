@@ -77,8 +77,8 @@ Content-Type: application/json
 | `bot` | `string` | **Required**. Bot number you want the order to execute on |
 | `order` | `string` | **Required**. Order type sell or buy |
 | `symbol` | `string` | **Required**. Symbol order should be placed |
-| `contracts` | `int` | **Required**. Number of contracts |
-| `order_price` | `int` | **Optional**. Entry price of order (if set total order is contracts * order_price * leverage) |
+| `contracts` | `int` | **Required**. Number of contracts in coin amounts |
+| `order_price` | `int` | **Optional**. Entry price of order (required for inverse contracts only, bybit api requires amount in USD for inverse) |
 | `auth_key` | `string` | **Required**. Auth key set as part of configuration |
 | `leverage` | `string` | **Required**. Leverage to use for the order |
 
