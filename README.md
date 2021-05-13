@@ -90,7 +90,7 @@ Remember to always test upgrades in testnet before using live!
     * Open Program *firebase-tools-instant-win.exe*
 * Mac OS
    * Open Program *Terminal*
-* Run the following commands in firebase cli
+* Run the following commands in firebase cli (windows) or terminal (mac os)
 ```shell
 cd %USERPROFILE% # for windows
 cd $HOME # for mac os
@@ -104,6 +104,8 @@ npm install
 cd ../
 firebase deploy
 ```
+* Perform Step 6 in setup instructions to ensure your energy-bot is still running
+  [Set Up Instructions](SETUP.md)
 
 ## Updating Configuration
 

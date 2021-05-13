@@ -55,7 +55,7 @@ application in google firebase. Steps could be slightly different if you have an
         ![firebase-tools-instant-win.png](doc-imgs/firebase-tools-instant-win.png)
     * Mac OS
        * Open Program *Terminal*
-    * Run the following commands in firebase cli
+    * Run the following commands in firebase cli (windows) or terminal (mac os)
     ```shell
     cd %USERPROFILE% # for windows
     cd $HOME # for mac os
