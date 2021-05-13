@@ -130,15 +130,7 @@ app.post('/', async (request, response, next) => {
 
 		await validateRequestBody(signalDetails).catch();
 
-		// Trading view strategies send contracts in the opposite of what Bybit API requires
-		// need to convert inverse to USD and Perpetual to amount in the coin
-		// Amount is after leverage for a total order amount
-		let totalOrderQty;
-		if (signalDetails.order_price) {
-			totalOrderQty = signalDetails.contracts * signalDetails.order_price * signalDetails.leverage;
-		} else {
-			totalOrderQty = signalDetails.contracts * signalDetails.leverage;
-		}
+		const totalOrderQty = await getTotalOrderQty(signalDetails).catch();
 
 		const orderDetails =
 			{
@@ -208,6 +200,31 @@ async function authValidator (request, response, next) {
 		error.http_status = 403;
 		error.http_response = 'Unauthorized';
 		return next(error);
+	}
+
+}
+
+async function getTotalOrderQty(signalDetails) {
+
+	// Treat contracts coming from trading view as post leverage
+	// Convert them back to position margin for placing order
+
+	// If Inverse contracts convert to USD for bybit api trading view sends it as coin amount
+	let totalOrderQty;
+	if (signalDetails.symbol.endsWith('USD')) {
+		if (!signalDetails.order_price) {
+			const error = new Error(`order_price must be in request body for inverse contracts`);
+			error.http_status = 400;
+			error.http_response = `order_price must be in request body for inverse contracts`;
+			throw error;
+		} else {
+			totalOrderQty = signalDetails.contracts / signalDetails.leverage * signalDetails.order_price ;
+			return totalOrderQty;
+		}
+
+	} else {
+		totalOrderQty = signalDetails.contracts / signalDetails.leverage;
+		return totalOrderQty;
 	}
 
 }
