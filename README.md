@@ -86,6 +86,8 @@ Content-Type: application/json
 
 Remember to always test upgrades in testnet before using live!
 
+If this is your first time setting up energy-bot follow [Set Up Instructions](SETUP.md) instead of this section
+
 * Windows
     * Open Program *firebase-tools-instant-win.exe*
 * Mac OS
