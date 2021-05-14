@@ -94,14 +94,14 @@ If this is your first time setting up energy-bot follow [Set Up Instructions](SE
    * Open Program *Terminal*
 * Run the following commands in firebase cli (windows) or terminal (mac os)
 ```shell
-cd %USERPROFILE% # for windows
-cd $HOME # for mac os
-cd energy-bot
+cd %USERPROFILE%\energy-bot # for windows
+cd $HOME/energy-bot # for mac os
 # Note if git is not found run the 2nd command
 git pull https://github.com/PaTiToMaSteR/energy-bot.git
 # This one is only needed if first one does not work 
 "%ProgramFiles%\Git\cmd\git.exe" pull https://github.com/PaTiToMaSteR/energy-bot.git
 cd functions
+# NPM install might throw a warning it can be ignored
 npm install
 cd ../
 firebase deploy
