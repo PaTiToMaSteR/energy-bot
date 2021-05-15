@@ -342,23 +342,22 @@ async function getCurrentPosition(client, data) {
 
 	functions.logger.debug(`Getting current position ${JSON.stringify(data)}`);
 	return await client.getPosition(data).then((positionsResponse) => {
-		functions.logger.debug(` Positions response ${JSON.stringify(positionsResponse)}`)
+		functions.logger.debug(`Positions response ${JSON.stringify(positionsResponse)}`)
 		let currentPosition = null;
-		for (let i = 0; i < positionsResponse.result.length; ++i) {
-			// API response is slightly different between Inverse and USDT
-			let position;
-			if (data.symbol.endsWith("USDT")) {
-				position = positionsResponse.result[i];
-			} else {
-				position = positionsResponse.result[i].data;
-			}
+		if (data.symbol.endsWith("USDT")) {
+			for (let i = 0; i < positionsResponse.result.length; ++i) {
+				// API response is slightly different between Inverse and USDT
+				const position = positionsResponse.result[i];
 
-			//const position = positionsResponse.result[i]
-			if (position.symbol === data.symbol) {
-				currentPosition = position;
-				functions.logger.debug(`Current position - Side: ${position.side} Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
-				return currentPosition;
+				if (position.symbol === data.symbol) {
+					currentPosition = position;
+					functions.logger.debug(`Current position - Side: ${position.side} Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
+					return currentPosition;
+				}
 			}
+		} else {
+			currentPosition = positionsResponse.result;
+			return currentPosition;
 		}
 		return null;
 	}).catch((error) => {
@@ -391,8 +390,7 @@ async function closePreviousPosition(currentPosition, client) {
 				error.http_response = 'Error placing order to close previous position';
 				throw error;
 			}
-			functions.logger.info(`${appVersion} ClosePreviousPosition: ${closeActiveOrderResponse.symbol} 
-			${closeActiveOrderResponse.side} ${closeActiveOrderResponse.price} ${closeActiveOrderResponse.qty}`)
+			functions.logger.info(`ClosePreviousPosition: ${closeActiveOrderResponse.result.symbol} ${closeActiveOrderResponse.result.side} ${closeActiveOrderResponse.result.price} ${closeActiveOrderResponse.result.qty}`);
 			return true;
 		}).catch((error) => {
 			error.http_status = 500;
