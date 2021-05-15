@@ -3,7 +3,7 @@ Friendly and community driven bot to be used with Energy Blast TradingView scrip
 web hooks. Designed to be deployed to Google Firebase to allow users who are not tech-savvy to easily set up energy bot. 
 The bot only supports *Long market orders* at this time. All active orders and conditional orders are canceled when 
 the bot receives an order. When energy bot receives a sell order the entire long position is closed no matter the number 
-of contracts in the request.
+of contracts in the request. The symbol you are training *must be set to isolated margin* or the bot will fail.
 
 *THIS SOFTWARE COMES WITH NO WARRANTY!*
 
