@@ -6,7 +6,7 @@ admin.initializeApp({
 	credential: admin.credential.applicationDefault(),
 });
 
-const appVersion = "1.0.4.2";
+const appVersion = "1.0.4.3";
 
 let closeOppositeSidePositions = true; // If an order is received that is the opposite position it wil be closed.
 
@@ -476,8 +476,17 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 
 	// Update Leverage
 	functions.logger.debug(`Setting User leverage to ${orderDetails.leverage}`);
-	await client.setUserLeverage(
-		{ symbol: orderDetails.symbol, buy_leverage: orderDetails.leverage, sell_leverage: orderDetails.leverage }).then((changeLeverageResponse) => {
+
+	// HACK TEST NET API leverage change request parameters are different from LIVE NET API
+	// This is only needed until ByBit promotes their code to live.
+	let setUserLeverageRequest;
+	if (client.requestWrapper.baseUrl === "https://api.bybit.com" && orderDetails.symbol.endsWith("USD")) {
+		setUserLeverageRequest = { symbol: orderDetails.symbol, leverage: orderDetails.leverage};
+	} else {
+		setUserLeverageRequest = { symbol: orderDetails.symbol, buy_leverage: orderDetails.leverage, sell_leverage: orderDetails.leverage };
+	}
+
+	await client.setUserLeverage(setUserLeverageRequest).then((changeLeverageResponse) => {
 		functions.logger.debug(JSON.stringify(changeLeverageResponse))
 		if (changeLeverageResponse.ret_code !== 0 && changeLeverageResponse.ret_code !== 34036 ) {
 			const error = new Error(`Error changing leverage ${changeLeverageResponse.ret_msg}`);
