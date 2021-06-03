@@ -174,7 +174,7 @@ app.post('/', async (request, response, next) => {
 });
 
 // error handler middleware
-app.use((error, request, response, next) => {
+app.use((error, request, response) => {
 	functions.logger.error(error.message);
 	response.status(error.http_status || 500).send(error.http_response || 'Internal Server Error');
 });
