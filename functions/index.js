@@ -100,13 +100,12 @@ app.get('/config/validate', async (request, response, next) => {
 		}
 
 		response.status(200).send('Configuration Validation Successful');
+		return null;
 	} catch (error) {
 		error.http_status = 500;
 		error.http_response = `Error ${error}`;
 		return next(error);
 	}
-
-	return next();
 
 });
 
