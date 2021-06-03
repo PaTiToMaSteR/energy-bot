@@ -30,12 +30,12 @@ app.get('/config/validate', async (request, response, next) => {
 
 	const config = functions.config();
 
-    if (config.auth.key === undefined || config.auth.key === '') {
-    	const error = new Error('auth.key config key not set with functions:config:set');
+	if (config.auth.key === undefined || config.auth.key === '') {
+		const error = new Error('auth.key config key not set with functions:config:set');
 		error.http_status = 500;
 		error.http_response = 'Error auth.key config key not set';
 		return next(error);
-    }
+	}
 
 	if (config.bot_1 === undefined) {
 		const error = new Error('bot_1 config key not set with functions:config:set');
@@ -44,68 +44,71 @@ app.get('/config/validate', async (request, response, next) => {
 		return next(error);
 	}
 
-    // Test that each bot's api keys can connect to bybit looping through all config keys for bot_i
-    let i = 1;
+	// Test that each bot's api keys can connect to bybit looping through all config keys for bot_i
+	let i = 1;
 	let loop = true;
+	let promiseArray = [];
 
-	try {
-		while (loop) {
+	while (loop) {
 
-			let botNumber = 'bot_' + i;
+		let botNumber = 'bot_' + i;
 
-			// If bot number doesn't exist break we are done
-			if (!config[botNumber]) break;
+		// If bot number doesn't exist break we are done
+		if (!config[botNumber]) break;
 
-			if (config[botNumber]['api_key'] === undefined) {
-				const error = new Error('api_key not set with functions:config:set');
-				error.http_status = 500;
-				error.http_response = `Error ${botNumber} api_key not set`;
-				return next(error);
-			}
+		if (config[botNumber]['api_key'] === undefined) {
+			const error = new Error('api_key not set with functions:config:set');
+			error.http_status = 500;
+			error.http_response = `Error ${botNumber} api_key not set`;
+			return next(error);
+		}
 
-			if (config[botNumber]['secret_key'] === undefined) {
-				const error = new Error(`${botNumber} secret_key not set with functions:config:set`);
-				error.http_status = 500;
-				error.http_response = `Error ${botNumber} secret_key not set`;
-				return next(error);
-			}
+		if (config[botNumber]['secret_key'] === undefined) {
+			const error = new Error(`${botNumber} secret_key not set with functions:config:set`);
+			error.http_status = 500;
+			error.http_response = `Error ${botNumber} secret_key not set`;
+			return next(error);
+		}
 
-			if (config[botNumber]['mode'] !== 'test' && config[botNumber]['mode'] !== 'live') {
-				const error = new Error(`${botNumber} mode must be set to either live or test with 
-				functions:config:set`);
-				error.http_status = 500;
-				error.http_response = `Error ${botNumber} mode must be set to either live or test`;
-				return next(error);
-			}
+		if (config[botNumber]['mode'] !== 'test' && config[botNumber]['mode'] !== 'live') {
+			const error = new Error(`${botNumber} mode must be set to either live or test with 
+			functions:config:set`);
+			error.http_status = 500;
+			error.http_response = `Error ${botNumber} mode must be set to either live or test`;
+			return next(error);
+		}
 
-			// We are only testing connection to bybit hard coding to BTCUSD is fine here
-			const bybit_client  = getByBitClient('BTCUSD', i);
+		// We are only testing connection to bybit hard coding to BTCUSD is fine here
+		const bybit_client  = getByBitClient('BTCUSD', i);
 
+		promiseArray.push(new Promise((resolve, reject) =>
 			bybit_client.getApiKeyInfo().then((apiKeyInfoResponse) => {
 				functions.logger.debug(`${botNumber} connecting to bybit`);
 				if (apiKeyInfoResponse.ret_code !== 0) {
 					functions.logger.error(`${botNumber} connection failed ${JSON.stringify(apiKeyInfoResponse)}`);
 					functions.logger.error(`${botNumber} connection failed`);
-					throw new Error(`${botNumber} could not connect to bybit
-					${JSON.stringify(apiKeyInfoResponse.ret_msg)}`);
+					const error = new Error(`${botNumber} could not connect to bybit ${JSON.stringify(apiKeyInfoResponse.ret_msg)}`);
+					error.http_status = 500;
+					error.http_response = `Error ${botNumber} could not connect to bybit`;
+					return reject(error);
 				} else {
 					functions.logger.debug(`${botNumber} connection successful`);
-					return null;
+					return resolve(`${botNumber} connection successful`);
 				}
-			}).catch((err) => {
-				throw new Error(`${botNumber} could not connect to bybit ${err}`);
-			})
+			}).catch((error) => {
+				return reject(error);
+			})))
 
-			i++;
-		}
+		i++;
+	}
 
+	await Promise.all(promiseArray).then(() => {
 		response.status(200).send('Configuration Validation Successful');
 		return null;
-	} catch (error) {
-		error.http_status = 500;
-		error.http_response = `Error ${error}`;
-		return next(error);
-	}
+	})
+		.catch(error => {
+			return next(error);
+	});
 
 });
 
@@ -157,7 +160,7 @@ app.post('/', async (request, response, next) => {
 			});
 		}
 		//
-        // Close order
+		// Close order
 		//
 		else if (signalDetails.order === "sell") {
 			functions.logger.info(`Closing trade: ${signalDetails.symbol}`);
@@ -229,20 +232,20 @@ function getByBitClient(symbol, bot_number) {
 
 	functions.logger.debug('Getting bybit client');
 
-    // Use api and secret key for bot number passed in
-    const config = functions.config();
-    let bot_config_name = 'bot_' + bot_number;
+	// Use api and secret key for bot number passed in
+	const config = functions.config();
+	let bot_config_name = 'bot_' + bot_number;
 
-    if (!config[bot_config_name]) {
+	if (!config[bot_config_name]) {
 		const error = new Error(`bot ${bot_config_name} not found in config`);
 		error.http_status = 400;
 		error.http_response = `bot ${bot_config_name} not found in config`;
 		throw error;
-    }
+	}
 
 	let use_live_mode = config[bot_config_name]['mode'] === 'live';
 
-    // Get the right client for the symbol in the request
+	// Get the right client for the symbol in the request
 	if (symbol.endsWith("USDT")) {
 		return new LinearClient(config[bot_config_name]['api_key'], config[bot_config_name]['secret_key'], use_live_mode);
 	} else {
