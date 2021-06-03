@@ -66,7 +66,7 @@ application in google firebase. Steps could be slightly different if you have an
     cd energy-bot
     firebase use --add
     # Select choice that begins with energy-bot using arrows on keyboard and hit enter key
-    # When prompted for alias enter 'live' and hit enter key
+    # When prompted for alias enter anything you want I call mine 'live' and hit enter key
     firebase functions:config:set bot_1.api_key="REPLACE_WITH_BYBIT_API_KEY_FROM_STEP_4"
     firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY_FROM_STEP_4"
     firebase functions:config:set bot_1.mode="'test' for testnet bybit or 'live' for normal bybit"
@@ -77,6 +77,7 @@ application in google firebase. Steps could be slightly different if you have an
     # NOTE recommend the auth key be at least 30 characters long
     # that is what protects your energy-bot setup by random people on the internet think of it like a password
     # save the value you set you will need it when configuring Trading View
+    # the auth key will be the same for all bots you config
     cd functions
     npm install
     cd ../
