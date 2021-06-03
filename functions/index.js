@@ -105,11 +105,11 @@ app.get('/config/validate', async (request, response, next) => {
 	await Promise.all(promiseArray).then(() => {
 		response.status(200).send('Configuration Validation Successful');
 		return null;
-	})
-		.catch(error => {
-			return next(error);
+	}).catch(error => {
+		return next(error);
 	});
 
+	return null;
 });
 
 // Use auth for all other requests
