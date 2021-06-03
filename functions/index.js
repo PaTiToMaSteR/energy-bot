@@ -6,7 +6,7 @@ admin.initializeApp({
 	credential: admin.credential.applicationDefault(),
 });
 
-const appVersion = "1.0.4.3";
+const appVersion = "1.0.4.4";
 
 let closeOppositeSidePositions = true; // If an order is received that is the opposite position it wil be closed.
 
