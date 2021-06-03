@@ -108,6 +108,17 @@ firebase deploy
 ```
 * Perform Step 6 in setup instructions to ensure your energy-bot is still running
   [Set Up Instructions](SETUP.md)
+  
+## Viewing Current Configuration
+
+Run the following commands to see the current configuration values
+
+```shell
+cd %USERPROFILE% # for windows
+cd $HOME # for mac os
+cd energy-bot
+firebase functions:config:get
+```
 
 ## Updating Configuration
 
