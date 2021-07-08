@@ -6,7 +6,7 @@ admin.initializeApp({
 	credential: admin.credential.applicationDefault(),
 });
 
-const appVersion = "1.0.4.4";
+const appVersion = "1.0.5.0";
 
 let closeOppositeSidePositions = true; // If an order is received that is the opposite position it wil be closed.
 
@@ -147,11 +147,9 @@ app.post('/', async (request, response, next) => {
 
 		const bybitClient = getByBitClient(signalDetails.symbol, signalDetails.bot);
 
-		//
-		// Strategy
-		//
-		if (signalDetails.order === "buy") {
-			functions.logger.info(`Opening trade: ${signalDetails.symbol}`);
+		// Open long position
+		if (signalDetails.order === "buy" && signalDetails.market_position === "long") {
+			functions.logger.info(`Opening long position: ${signalDetails.symbol}`);
 			await createOrder({
 				response: response,
 				signalDetails: signalDetails,
@@ -159,12 +157,32 @@ app.post('/', async (request, response, next) => {
 				orderDetails: orderDetails
 			});
 		}
-		//
-		// Close order
-		//
-		else if (signalDetails.order === "sell") {
-			functions.logger.info(`Closing trade: ${signalDetails.symbol}`);
-			await stopOrder({response: response, client: bybitClient, signalDetails: signalDetails});
+
+		// Open short position
+		else if (signalDetails.order === "sell" && signalDetails.market_position === "short") {
+			functions.logger.info(`Opening short position: ${signalDetails.symbol}`);
+			await createOrder({
+				response: response,
+				signalDetails: signalDetails,
+				client: bybitClient,
+				orderDetails: orderDetails
+			});
+		}
+
+		// Close long position
+		else if (signalDetails.order === "sell" &&
+			(signalDetails.market_position === "long" || signalDetails.market_position === "flat")) {
+			functions.logger.info(`Closing long position: ${signalDetails.symbol}`);
+			await stopOrder({response: response, client: bybitClient,
+				signalDetails: signalDetails});
+		}
+
+		// Close short position
+		else if (signalDetails.order === "buy" &&
+			(signalDetails.market_position === "short" || signalDetails.market_position === "flat")) {
+			functions.logger.info(`Closing short position: ${signalDetails.symbol}`);
+			await stopOrder({response: response, client: bybitClient,
+				signalDetails: signalDetails});
 		}
 
 	} catch (error) {
@@ -298,6 +316,14 @@ async function validateRequestBody(signalDetails) {
 		throw error;
 	}
 
+	if (signalDetails.market_position !== 'long' && signalDetails.market_position !== 'short' &&
+		signalDetails.market_position !== 'flat') {
+		const error = new Error('market_position field must be long, short, or flat');
+		error.http_status = 400;
+		error.http_response = 'market_position field must be long, short, or flat';
+		throw error;
+	}
+
 }
 
 async function cancelAll(client, data) {
@@ -346,14 +372,22 @@ async function getCurrentPosition(client, data) {
 	return await client.getPosition(data).then((positionsResponse) => {
 		functions.logger.debug(`Positions response ${JSON.stringify(positionsResponse)}`)
 		let currentPosition = null;
+
+		// API response is slightly different between Inverse and USDT
 		if (data.symbol.endsWith("USDT")) {
+
+			let opposite_position_side;
+			if (data.order_side === "buy" || data.order_side === "Buy") {
+				opposite_position_side = "Sell"
+			} else {
+				opposite_position_side = "Buy"
+			}
+
 			for (let i = 0; i < positionsResponse.result.length; ++i) {
-				// API response is slightly different between Inverse and USDT
 				const position = positionsResponse.result[i];
 
-				if (position.symbol === data.symbol) {
+				if (position.symbol === data.symbol && position.side === opposite_position_side) {
 					currentPosition = position;
-					functions.logger.debug(`Current position - Side: ${position.side} Entry Price: ${position.entry_price} Position Value: ${position.position_value} Leverage: ${position.leverage}`);
 					return currentPosition;
 				}
 			}
@@ -433,13 +467,13 @@ async function stopOrder({ response, client, signalDetails }) {
 		await cancelAll(client, { symbol: signalDetails.symbol });
 
 		// Current Position
-		const currentPosition = await getCurrentPosition(client, { symbol: signalDetails.symbol });
+		const currentPosition = await getCurrentPosition(client, { symbol: signalDetails.symbol, order_side: signalDetails.order });
 
 		// Close Previous Order
 		if (currentPosition.size > 0) {
 			const success = await closePreviousPosition(currentPosition, client);
 			success ? response.status(200) : response.status(500);
-			response.status(200).send('Sell order placed Successfully');
+			response.status(200).send(`${signalDetails.order} order placed successfully`);
 		}
 		else {
 			functions.logger.info('There is no current position open')
@@ -464,12 +498,11 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 	orderDetails.order_type = "Market";
 
 	// Current Position
-	const currentPosition = await getCurrentPosition(client, { symbol: orderDetails.symbol });
+	const currentPosition = await getCurrentPosition(client, { symbol: orderDetails.symbol, order_side: orderDetails.side });
 	if (currentPosition) {
-		functions.logger.info('There is a current position');
 
 		// If opposite side position exists for symbol close that position before opening opposite position
-		if (closeOppositeSidePositions && currentPosition.side !== orderDetails.side) {
+		if (closeOppositeSidePositions && currentPosition.side !== orderDetails.side && currentPosition.size > 0) {
 			functions.logger.info('Current position is not the same side as requested closing opposite side position');
 			await closePreviousPosition(currentPosition, client);
 		}
@@ -482,7 +515,7 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 	// HACK TEST NET API leverage change request parameters are different from LIVE NET API
 	// This is only needed until ByBit promotes their code to live.
 	let setUserLeverageRequest;
-	if (client.requestWrapper.baseUrl === "https://api.bybit.com" && orderDetails.symbol.endsWith("USD")) {
+	if (orderDetails.symbol.endsWith("USD")) {
 		setUserLeverageRequest = { symbol: orderDetails.symbol, leverage: orderDetails.leverage};
 	} else {
 		setUserLeverageRequest = { symbol: orderDetails.symbol, buy_leverage: orderDetails.leverage, sell_leverage: orderDetails.leverage };
@@ -518,7 +551,7 @@ async function createOrder({ response, client, orderDetails, conditionalOrderBuf
 		throw error;
 	});
 
-	response.status(200).send('Buy Order Placed Successfully');
+	response.status(200).send(`${orderDetails.side} Order Placed Successfully`);
 	return true;
 
 }

@@ -1,9 +1,10 @@
 # energy-bot
 Friendly and community driven bot to be used with Energy Blast TradingView script or any other to place bybit orders via
 web hooks. Designed to be deployed to Google Firebase to allow users who are not tech-savvy to easily set up energy bot. 
-The bot only supports *Long market orders* at this time. All active orders and conditional orders are canceled when 
-the bot receives an order. When energy bot receives a sell order the entire long position is closed no matter the number 
-of contracts in the request. The symbol you are training *must be set to isolated margin* or the bot will fail.
+The bot supports *Long market orders* and *Short market orders* at this time. All active orders and conditional orders 
+are canceled when the bot receives an order. When energy bot receives a sell or buy order that is the opposite side of
+current position the entire position is closed no matter the number of contracts in the request. 
+The symbol you are training *must be set to isolated margin* or the bot will fail.
 
 *THIS SOFTWARE COMES WITH NO WARRANTY!*
 
@@ -43,7 +44,7 @@ GET /scalper/up
 ```
 Response
 ```http
-I'm alive running version 1.0.4.2
+I'm alive running version 1.0.5.0
 ```
 
 ### Config Validate - Returns 200 if config validation passes and can connect to bybit
@@ -65,6 +66,7 @@ Content-Type: application/json
 {
     "bot": "",
     "order": "",
+    "market_position": "",
     "symbol": "",
     "contracts": "",
     "auth_key": "",
@@ -76,6 +78,7 @@ Content-Type: application/json
 | :--- | :--- | :--- |
 | `bot` | `string` | **Required**. Bot number you want the order to execute on |
 | `order` | `string` | **Required**. Order type sell or buy |
+| `market_position` | `string` | **Required**. Market Position long, short, or flat |
 | `symbol` | `string` | **Required**. Symbol order should be placed |
 | `contracts` | `int` | **Required**. Number of contracts in coin amounts |
 | `order_price` | `int` | **Optional**. Entry price of order (required for inverse contracts only, bybit api requires amount in USD for inverse) |
