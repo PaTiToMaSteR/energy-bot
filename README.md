@@ -44,7 +44,7 @@ GET /scalper/up
 ```
 Response
 ```http
-I'm alive running version 1.0.5.0
+I'm alive running version 1.0.5.1
 ```
 
 ### Config Validate - Returns 200 if config validation passes and can connect to bybit
@@ -84,6 +84,8 @@ Content-Type: application/json
 | `order_price` | `int` | **Optional**. Entry price of order (required for inverse contracts only, bybit api requires amount in USD for inverse) |
 | `auth_key` | `string` | **Required**. Auth key set as part of configuration |
 | `leverage` | `string` | **Required**. Leverage to use for the order |
+| `prev_market_position` | `string` | **Optional**. Prev Market Position long, short, or flat this is required if trading view goes directly from one side to another |
+| `prev_market_position_size` | `int` | **Optional**. This is required if trading view goes directly from one side to another to get the order size of the new trade|
 
 ## Upgrades
 

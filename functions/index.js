@@ -6,7 +6,7 @@ admin.initializeApp({
 	credential: admin.credential.applicationDefault(),
 });
 
-const appVersion = "1.0.5.0";
+const appVersion = "1.0.5.1";
 
 let closeOppositeSidePositions = true; // If an order is received that is the opposite position it wil be closed.
 
@@ -228,6 +228,15 @@ async function getTotalOrderQty(signalDetails) {
 
 	// If Inverse contracts convert to USD for bybit api trading view sends it as coin amount
 	let totalOrderQty;
+
+	// When trading view goes change market directions it sends the entire size in contracts need to convert to the
+	// correct order size when changing directions
+	if ((signalDetails.prev_market_position === 'short' && signalDetails.market_position === 'long') ||
+		(signalDetails.prev_market_position === 'long' && signalDetails.market_position === 'short')) {
+		signalDetails.contracts = round((signalDetails.contracts - signalDetails.prev_market_position_size), 6);
+		functions.logger.info(`Position changed directions updating contract size to ${signalDetails.contracts}`);
+	}
+
 	if (signalDetails.symbol.endsWith('USD')) {
 		if (!signalDetails.order_price) {
 			const error = new Error(`order_price must be in request body for inverse contracts`);
@@ -245,6 +254,11 @@ async function getTotalOrderQty(signalDetails) {
 	}
 
 }
+
+function round(value, decimals) {
+	return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
+}
+
 
 function getByBitClient(symbol, bot_number) {
 
@@ -277,7 +291,7 @@ async function validateRequestBody(signalDetails) {
 	functions.logger.debug('Validating Request Body');
 
 	// Check that all required parameters are in request body
-	const bodyParameters = ['bot', 'order', 'symbol', 'contracts', 'leverage'];
+	const bodyParameters = ['bot', 'order', 'symbol', 'contracts', 'leverage', 'market_position'];
 
 	for(const parameter of bodyParameters) {
 		if (!signalDetails[parameter]) {
@@ -289,23 +303,23 @@ async function validateRequestBody(signalDetails) {
 	}
 
 	if (signalDetails.leverage < 1 || signalDetails.leverage > 100) {
-		const error = new Error('Leverage field must be set between 1 and 100 in request body');
+		const error = new Error('leverage field must be set between 1 and 100 in request body');
 		error.http_status = 400;
-		error.http_response = 'Leverage field must be set between 1 and 100 in request body';
+		error.http_response = 'leverage field must be set between 1 and 100 in request body';
 		throw error;
 	}
 
 	if (signalDetails.order !== 'buy' && signalDetails.order !== 'sell') {
-		const error = new Error('Order field must be set to either buy or sell');
+		const error = new Error('order field must be set to either buy or sell');
 		error.http_status = 400;
-		error.http_response = 'Order field must be set to either buy or sell';
+		error.http_response = 'order field must be set to either buy or sell';
 		throw error;
 	}
 
 	if (signalDetails.contracts < 0) {
-		const error = new Error('Contracts field must be positive number');
+		const error = new Error('contracts field must be positive number');
 		error.http_status = 400;
-		error.http_response = 'Contracts field must be positive number';
+		error.http_response = 'contracts field must be positive number';
 		throw error;
 	}
 
@@ -323,6 +337,26 @@ async function validateRequestBody(signalDetails) {
 		error.http_response = 'market_position field must be long, short, or flat';
 		throw error;
 	}
+
+	if (signalDetails.prev_market_position) {
+		if (signalDetails.prev_market_position !== 'long' && signalDetails.prev_market_position !== 'short' &&
+			signalDetails.prev_market_position !== 'flat') {
+			const error = new Error('prev_market_position field must be long, short, or flat');
+			error.http_status = 400;
+			error.http_response = 'prev_market_position field must be long, short, or flat';
+			throw error;
+		}
+	}
+
+	if (signalDetails.prev_market_position_size) {
+		if (signalDetails.prev_market_position_size < 0) {
+			const error = new Error('prev_market_position_size field must be positive number');
+			error.http_status = 400;
+			error.http_response = 'prev_market_position_size field must be positive number';
+			throw error;
+		}
+	}
+
 
 }
 
