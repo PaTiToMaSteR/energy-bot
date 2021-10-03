@@ -88,6 +88,8 @@ As example in TradingView
   "leverage": "REPLACE_WITH_YOU_LEVERAGE_X"
 }
 ```
+Config to use BUSD in Binance for Spot Trading
+![binance-spot-trading-config-with-BUSD.png](doc-imgs/binance-spot-trading-config-with-BUSD.png)
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
