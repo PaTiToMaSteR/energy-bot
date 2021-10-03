@@ -89,7 +89,7 @@ As example in TradingView
 }
 ```
 Config to use BUSD in Binance for Spot Trading
-[binance-spot-trading-config-with-BUSD.png](doc-imgs/binance-spot-trading-config-with-BUSD.png)
+![binance-spot-trading-config-with-BUSD.png](doc-imgs/binance-spot-trading-config-with-BUSD.png)
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
