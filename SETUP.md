@@ -95,7 +95,7 @@ application in google firebase. Steps could be slightly different if you have an
     * In your web browser of choice go to https://REPLACE_WITH_BASE_URL/scalper/up it should display *I'm alive*
     ![up-response.png](doc-imgs/up-response.png)
         * If it does not you missed a step above or are using the wrong URL
-    * In your web browser of choice go to https://REPLACE_WITH_BASE_URL/scalper/config/validate it should display 
+    * In your web browser of choice go to https://REPLACE_WITH_BASE_URL/scalper/config/validate it should display or use: curl -X GET https://europe-west1-traderbot-prompt.cloudfunctions.net/scalper/config/validate -H "Content-Type: application/json" -d '{"auth_key": "REPLACE_WITH_RANDOM_STRING_OF_LETTERS_AND_NUMBERS"}'  
       *Configuration Validation Successful*
     ![config-validate-response.png](doc-imgs/config-validate-response.png)
         * If it does not there is a configuration issue look at the output it should tell you want is wrong

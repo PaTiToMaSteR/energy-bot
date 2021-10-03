@@ -1,9 +1,10 @@
 const functions = require("firebase-functions");
 const { InverseClient, LinearClient } = require("bybit-api");
+const Binance = require('node-binance-api');
 const admin = require('firebase-admin');
 
 admin.initializeApp({
-	credential: admin.credential.applicationDefault(),
+    credential: admin.credential.applicationDefault(),
 });
 
 const appVersion = "1.0.5.1";
@@ -17,577 +18,1041 @@ exports.scalper = functions.region('europe-west1').https.onRequest(app);
 
 // Basic up endpoint to that returns a 200 and api version
 // Useful for debugging / monitoring
-app.get('/up', async (request, response) => {
-	const msg = `I'm alive running version ${appVersion}`;
-	functions.logger.info(msg);
-	response.status(200).send(msg);
+app.get('/up', async (request, response) =>
+{
+    const msg = `I'm alive running version ${appVersion}`;
+    functions.logger.info(msg);
+    response.status(200).send(msg);
 });
 
 // Confirms that configuration values can be loaded and that api keys can auth to ByBit
-app.get('/config/validate', async (request, response, next) => {
+app.get('/config/validate', async (request, response, next) =>
+{
 
-	functions.logger.info(`${appVersion} Running config validation`);
+    functions.logger.info(`${appVersion} Running config validation`);
 
-	const config = functions.config();
+    const config = functions.config();
 
-	if (config.auth.key === undefined || config.auth.key === '') {
-		const error = new Error('auth.key config key not set with functions:config:set');
-		error.http_status = 500;
-		error.http_response = 'Error auth.key config key not set';
-		return next(error);
-	}
+    if (config.auth.key === undefined || config.auth.key === '')
+    {
+        const error = new Error('auth.key config key not set with functions:config:set');
+        error.http_status = 500;
+        error.http_response = 'Error auth.key config key not set';
+        return next(error);
+    }
 
-	if (config.bot_1 === undefined) {
-		const error = new Error('bot_1 config key not set with functions:config:set');
-		error.http_status = 500;
-		error.http_response = 'Error bot_1 config key not set at least one bot must be configured';
-		return next(error);
-	}
+    if (config.bot_1 === undefined)
+    {
+        const error = new Error('bot_1 config key not set with functions:config:set');
+        error.http_status = 500;
+        error.http_response = 'Error bot_1 config key not set at least one bot must be configured';
+        return next(error);
+    }
 
-	// Test that each bot's api keys can connect to bybit looping through all config keys for bot_i
-	let i = 1;
-	let loop = true;
-	let promiseArray = [];
+    // Test that each bot's api keys can connect to bybit looping through all config keys for bot_i
+    let i = 1;
+    let loop = true;
+    let promiseArray = [];
 
-	while (loop) {
+    while (loop)
+    {
 
-		let botNumber = 'bot_' + i;
+        let botNumber = 'bot_' + i;
 
-		// If bot number doesn't exist break we are done
-		if (!config[botNumber]) break;
+        // If bot number doesn't exist break we are done
+        if (!config[botNumber]) break;
 
-		if (config[botNumber]['api_key'] === undefined) {
-			const error = new Error('api_key not set with functions:config:set');
-			error.http_status = 500;
-			error.http_response = `Error ${botNumber} api_key not set`;
-			return next(error);
-		}
+        if (config[botNumber]['api_key'] === undefined)
+        {
+            const error = new Error('api_key not set with functions:config:set');
+            error.http_status = 500;
+            error.http_response = `Error ${botNumber} api_key not set`;
+            return next(error);
+        }
 
-		if (config[botNumber]['secret_key'] === undefined) {
-			const error = new Error(`${botNumber} secret_key not set with functions:config:set`);
-			error.http_status = 500;
-			error.http_response = `Error ${botNumber} secret_key not set`;
-			return next(error);
-		}
+        if (config[botNumber]['secret_key'] === undefined)
+        {
+            const error = new Error(`${botNumber} secret_key not set with functions:config:set`);
+            error.http_status = 500;
+            error.http_response = `Error ${botNumber} secret_key not set`;
+            return next(error);
+        }
 
-		if (config[botNumber]['mode'] !== 'test' && config[botNumber]['mode'] !== 'live') {
-			const error = new Error(`${botNumber} mode must be set to either live or test with 
+        if (config[botNumber]['mode'] !== 'test' && config[botNumber]['mode'] !== 'live')
+        {
+            const error = new Error(`${botNumber} mode must be set to either live or test with 
 			functions:config:set`);
-			error.http_status = 500;
-			error.http_response = `Error ${botNumber} mode must be set to either live or test`;
-			return next(error);
-		}
+            error.http_status = 500;
+            error.http_response = `Error ${botNumber} mode must be set to either live or test`;
+            return next(error);
+        }
 
-		// We are only testing connection to bybit hard coding to BTCUSD is fine here
-		const bybit_client  = getByBitClient('BTCUSD', i);
+        if (config[botNumber]['platform'] === undefined)
+        {
+            const error = new Error('platform not set with functions:config:set');
+            error.http_status = 500;
+            error.http_response = `Error ${botNumber} platform not set, supported 'bybit' and 'binance' (spot trading)`;
+            return next(error);
+        }
+        else if (config[botNumber]['platform'] === 'bybit')
+        {
+            // We are only testing connection to bybit hard coding to BTCUSD is fine here
+            const bybit_client = getByBitClient('BTCUSD', i);
 
-		promiseArray.push(new Promise((resolve, reject) =>
-			bybit_client.getApiKeyInfo().then((apiKeyInfoResponse) => {
-				functions.logger.debug(`${botNumber} connecting to bybit`);
-				if (apiKeyInfoResponse.ret_code !== 0) {
-					functions.logger.error(`${botNumber} connection failed ${JSON.stringify(apiKeyInfoResponse)}`);
-					functions.logger.error(`${botNumber} connection failed`);
-					const error = new Error(`${botNumber} could not connect to bybit ${JSON.stringify(apiKeyInfoResponse.ret_msg)}`);
-					error.http_status = 500;
-					error.http_response = `Error ${botNumber} could not connect to bybit`;
-					return reject(error);
-				} else {
-					functions.logger.debug(`${botNumber} connection successful`);
-					return resolve(`${botNumber} connection successful`);
-				}
-			}).catch((error) => {
-				return reject(error);
-			})))
+            promiseArray.push(new Promise((resolve, reject) =>
+                bybit_client.getApiKeyInfo().then((apiKeyInfoResponse) =>
+                {
+                    functions.logger.debug(`${botNumber} connecting to bybit`);
+                    if (apiKeyInfoResponse.ret_code !== 0)
+                    {
+                        functions.logger.error(`${botNumber} connection failed ${JSON.stringify(apiKeyInfoResponse)}`);
+                        functions.logger.error(`${botNumber} connection failed`);
+                        const error = new Error(`${botNumber} could not connect to bybit ${JSON.stringify(apiKeyInfoResponse.ret_msg)}`);
+                        error.http_status = 500;
+                        error.http_response = `Error ${botNumber} could not connect to bybit`;
+                        return reject(error);
+                    } else
+                    {
+                        functions.logger.debug(`${botNumber} connection successful`);
+                        return resolve(`${botNumber} connection successful`);
+                    }
+                }).catch((error) =>
+                {
+                    return reject(error);
+                })))
 
-		i++;
-	}
+            i++;
+        }
+        else if (config[botNumber]['platform'] === 'binance')
+        {
+            // We are only testing connection to bybit hard coding to BTCUSD is fine here
+            const binance = getBinanceClient(i);
 
-	await Promise.all(promiseArray).then(() => {
-		response.status(200).send('Configuration Validation Successful');
-		return null;
-	}).catch(error => {
-		return next(error);
-	});
+            promiseArray.push(new Promise((resolve, reject) =>
+                binance.prices()
+                    .then((prices) =>
+                    {
+                        functions.logger.debug(`${botNumber} - BTCBUSD: ${JSON.stringify(prices.BTCBUSD)}`);
+                        return resolve(`${botNumber} connection successful`);
+                    })
+                    .catch(error =>
+                    {
 
-	return null;
+                        return reject(error);
+                    })));
+            i++;
+        }
+    }
+
+    await Promise.all(promiseArray).then(() =>
+    {
+        response.status(200).send('Configuration Validation Successful');
+        return null;
+    }).catch(error =>
+    {
+        return next(error);
+    });
+
+    return null;
+});
+
+app.get('/balances', async (request, response, next) =>
+{
+
+    functions.logger.info(`${appVersion} Running config validation`);
+
+    const config = functions.config();
+
+    if (config.auth.key === undefined || config.auth.key === '')
+    {
+        const error = new Error('auth.key config key not set with functions:config:set');
+        error.http_status = 500;
+        error.http_response = 'Error auth.key config key not set';
+        return next(error);
+    }
+
+    if (config.bot_1 === undefined)
+    {
+        const error = new Error('bot_1 config key not set with functions:config:set');
+        error.http_status = 500;
+        error.http_response = 'Error bot_1 config key not set at least one bot must be configured';
+        return next(error);
+    }
+
+    // Test that each bot's api keys can connect to bybit looping through all config keys for bot_i
+    let i = 1;
+    let loop = true;
+    let promiseArray = [];
+    let data = [];
+
+    while (loop)
+    {
+
+        let botNumber = 'bot_' + i;
+
+        // If bot number doesn't exist break we are done
+        if (!config[botNumber]) break;
+
+        if (config[botNumber]['api_key'] === undefined)
+        {
+            const error = new Error('api_key not set with functions:config:set');
+            error.http_status = 500;
+            error.http_response = `Error ${botNumber} api_key not set`;
+            return next(error);
+        }
+
+        if (config[botNumber]['secret_key'] === undefined)
+        {
+            const error = new Error(`${botNumber} secret_key not set with functions:config:set`);
+            error.http_status = 500;
+            error.http_response = `Error ${botNumber} secret_key not set`;
+            return next(error);
+        }
+
+        if (config[botNumber]['mode'] !== 'test' && config[botNumber]['mode'] !== 'live')
+        {
+            const error = new Error(`${botNumber} mode must be set to either live or test with 
+			functions:config:set`);
+            error.http_status = 500;
+            error.http_response = `Error ${botNumber} mode must be set to either live or test`;
+            return next(error);
+        }
+
+        if (config[botNumber]['platform'] === undefined)
+        {
+            const error = new Error('platform not set with functions:config:set');
+            error.http_status = 500;
+            error.http_response = `Error ${botNumber} platform not set`;
+            return next(error);
+        }
+        else if (config[botNumber]['platform'] === 'bybit')
+        {
+            // We are only testing connection to bybit hard coding to BTCUSD is fine here
+            const bybit_client = getByBitClient('BTCUSD', i);
+
+            promiseArray.push(new Promise((resolve, reject) =>
+                bybit_client.getApiKeyInfo().then((apiKeyInfoResponse) =>
+                {
+                    functions.logger.debug(`${botNumber} connecting to bybit`);
+                    if (apiKeyInfoResponse.ret_code !== 0)
+                    {
+                        functions.logger.error(`${botNumber} connection failed ${JSON.stringify(apiKeyInfoResponse)}`);
+                        functions.logger.error(`${botNumber} connection failed`);
+                        const error = new Error(`${botNumber} could not connect to bybit ${JSON.stringify(apiKeyInfoResponse.ret_msg)}`);
+                        error.http_status = 500;
+                        error.http_response = `Error ${botNumber} could not connect to bybit`;
+                        return reject(error);
+                    } else
+                    {
+                        functions.logger.debug(`${botNumber} connection successful`);
+                        return resolve(`${botNumber} connection successful`);
+                    }
+                }).catch((error) =>
+                {
+                    return reject(error);
+                })))
+
+            i++;
+        }
+        else if (config[botNumber]['platform'] === 'binance')
+        {
+            // We are only testing connection to bybit hard coding to BTCUSD is fine here
+            const binance = getBinanceClient(i);
+
+            promiseArray.push(new Promise((resolve, reject) =>
+                binance.balance()
+                    .then((info) =>
+                    {
+                        if (request.query.token)
+                        {
+                            data.push(info[request.query.token]);
+                        }
+                        else
+                        {
+                            data.push(info);
+                        }
+
+                        return resolve(`${botNumber} connection successful`);
+                    })
+                    .catch(error =>
+                    {
+                        return reject(error);
+                    })));
+            i++;
+        }
+    }
+
+    await Promise.all(promiseArray).then(() =>
+    {
+        if (request.query.token)
+        {
+            response.status(200).send(JSON.stringify(data));
+        }
+        else
+        {
+            let hidden0balance = [];
+            for (let i = 0; i < data.length; ++i)
+            {
+                for (const key in data[i])
+                {
+                    const token = data[i][key];
+                    if (parseFloat(token.available) !== 0.0 || parseFloat(token.onOrder) !== 0.0)
+                        hidden0balance.push({ token: key, available: token.available, onOrder: token.onOrder });
+
+                }
+            }
+            response.status(200).send(JSON.stringify(hidden0balance));
+        }
+
+        return null;
+    }).catch(error =>
+    {
+        return next(error);
+    });
+    return null;
 });
 
 // Use auth for all other requests
 app.use(authValidator);
 
-app.post('/', async (request, response, next) => {
+app.post('/', async (request, response, next) =>
+{
+    functions.logger.info(`${appVersion} Scraper request received`);
 
-	functions.logger.info(`${appVersion} Scraper request received`);
+    let signalDetails = null;
 
-	let signalDetails = null;
+    try
+    {
+        if (request.accepts("application/json"))
+        {
+            signalDetails = request.body;
+        } else
+        {
+            signalDetails = JSON.parse(request.body);
+        }
 
-	try {
-		if (request.accepts("application/json")) {
-			signalDetails = request.body;
-		} else {
-			signalDetails = JSON.parse(request.body);
-		}
+        functions.logger.info(JSON.stringify(signalDetails));
 
-		functions.logger.info(JSON.stringify(signalDetails));
+        await validateRequestBody(signalDetails).catch();
 
-		await validateRequestBody(signalDetails).catch();
+        const totalOrderQty = await getTotalOrderQty(signalDetails).catch();
 
-		const totalOrderQty = await getTotalOrderQty(signalDetails).catch();
+        const orderDetails =
+        {
+            side: signalDetails.order === "buy" ? "Buy" : "Sell",	// tradingview strategy fix for bybit
+            symbol: signalDetails.symbol,
+            leverage: signalDetails.leverage,
+            time_in_force: "ImmediateOrCancel",
+            reduce_only: false,
+            close_on_trigger: false,
+            qty: totalOrderQty
+        };
 
-		const orderDetails =
-			{
-				side: signalDetails.order === "buy" ? "Buy" : "Sell",	// tradingview strategy fix for bybit
-				symbol: signalDetails.symbol,
-				leverage: signalDetails.leverage,
-				time_in_force: "ImmediateOrCancel",
-				reduce_only: false,
-				close_on_trigger: false,
-				qty: totalOrderQty
-			};
+        let client = null;
+        const config = functions.config();
+        if (config[`bot_${signalDetails.bot}`]['platform'] === undefined)
+        {
+            const error = new Error('platform not set with functions:config:set');
+            error.http_status = 500;
+            error.http_response = `Error ${signalDetails.bot} platform not set`;
+            return next(error);
+        }
+        else if (config[`bot_${signalDetails.bot}`]['platform'] === 'bybit')
+        {
+            client = getByBitClient(signalDetails.symbol, signalDetails.bot);
+        }
+        else if (config[`bot_${signalDetails.bot}`]['platform'] === 'binance')
+        {
+            client = getBinanceClient(signalDetails.bot);
+        }
 
-		const bybitClient = getByBitClient(signalDetails.symbol, signalDetails.bot);
+        // Open long position
+        if (signalDetails.order === "buy" && signalDetails.market_position === "long")
+        {
+            functions.logger.info(`Opening long position: ${signalDetails.symbol}`);
+            await createOrder({
+                response: response,
+                signalDetails: signalDetails,
+                client: client,
+                orderDetails: orderDetails
+            });
+        }
 
-		// Open long position
-		if (signalDetails.order === "buy" && signalDetails.market_position === "long") {
-			functions.logger.info(`Opening long position: ${signalDetails.symbol}`);
-			await createOrder({
-				response: response,
-				signalDetails: signalDetails,
-				client: bybitClient,
-				orderDetails: orderDetails
-			});
-		}
+        // Open short position
+        else if (signalDetails.order === "sell" && signalDetails.market_position === "short")
+        {
+            functions.logger.info(`Opening short position: ${signalDetails.symbol}`);
+            await createOrder({
+                response: response,
+                signalDetails: signalDetails,
+                client: client,
+                orderDetails: orderDetails
+            });
+        }
 
-		// Open short position
-		else if (signalDetails.order === "sell" && signalDetails.market_position === "short") {
-			functions.logger.info(`Opening short position: ${signalDetails.symbol}`);
-			await createOrder({
-				response: response,
-				signalDetails: signalDetails,
-				client: bybitClient,
-				orderDetails: orderDetails
-			});
-		}
+        // Close long position
+        else if (signalDetails.order === "sell" &&
+            (signalDetails.market_position === "long" || signalDetails.market_position === "flat"))
+        {
+            functions.logger.info(`Closing long position: ${signalDetails.symbol}`);
+            await stopOrder({
+                response: response, client: client,
+                signalDetails: signalDetails
+            });
+        }
 
-		// Close long position
-		else if (signalDetails.order === "sell" &&
-			(signalDetails.market_position === "long" || signalDetails.market_position === "flat")) {
-			functions.logger.info(`Closing long position: ${signalDetails.symbol}`);
-			await stopOrder({response: response, client: bybitClient,
-				signalDetails: signalDetails});
-		}
+        // Close short position
+        else if (signalDetails.order === "buy" &&
+            (signalDetails.market_position === "short" || signalDetails.market_position === "flat"))
+        {
+            functions.logger.info(`Closing short position: ${signalDetails.symbol}`);
+            await stopOrder({
+                response: response, client: client,
+                signalDetails: signalDetails
+            });
+        }
 
-		// Close short position
-		else if (signalDetails.order === "buy" &&
-			(signalDetails.market_position === "short" || signalDetails.market_position === "flat")) {
-			functions.logger.info(`Closing short position: ${signalDetails.symbol}`);
-			await stopOrder({response: response, client: bybitClient,
-				signalDetails: signalDetails});
-		}
+    } catch (error)
+    {
+        return next(error);
+    }
 
-	} catch (error) {
-		return next(error);
-	}
-
-	return next()
+    return next()
 
 });
 
 // error handler middleware
-app.use((error, request, response, next) => {
-	functions.logger.error(error.message);
-	response.status(error.http_status || 500).send(error.http_response || 'Internal Server Error');
+app.use((error, request, response, next) =>
+{
+    functions.logger.error(error.message);
+    response.status(error.http_status || 500).send(error.http_response || 'Internal Server Error');
 });
 
-async function authValidator (request, response, next) {
+async function authValidator(request, response, next)
+{
 
-	functions.logger.debug('Running auth validator');
+    functions.logger.debug('Running auth validator');
 
-	// TradingView does not support custom request headers adding basic auth key to request body to give basic
-	// security to the api
-	if (!functions.config().auth.key) {
-		const error = new Error('auth.key config key not found');
-		error.http_status = 403;
-		error.http_response = 'Unauthorized';
-		return next(error);
-	}
+    // TradingView does not support custom request headers adding basic auth key to request body to give basic
+    // security to the api
+    if (!functions.config().auth.key)
+    {
+        const error = new Error('auth.key config key not found');
+        error.http_status = 403;
+        error.http_response = 'Unauthorized';
+        return next(error);
+    }
 
-	if (request.body.auth_key === functions.config().auth.key) {
-		functions.logger.info(`auth.key in request body valid`);
-		return next();
-	} else {
-		const error = new Error('auth_key in request body not valid or not provided');
-		error.http_status = 403;
-		error.http_response = 'Unauthorized';
-		return next(error);
-	}
-
-}
-
-async function getTotalOrderQty(signalDetails) {
-
-	// If Inverse contracts convert to USD for bybit api trading view sends it as coin amount
-	let totalOrderQty;
-
-	// When trading view goes change market directions it sends the entire size in contracts need to convert to the
-	// correct order size when changing directions
-	if ((signalDetails.prev_market_position === 'short' && signalDetails.market_position === 'long') ||
-		(signalDetails.prev_market_position === 'long' && signalDetails.market_position === 'short')) {
-		signalDetails.contracts = round((signalDetails.contracts - signalDetails.prev_market_position_size), 6);
-		functions.logger.info(`Position changed directions updating contract size to ${signalDetails.contracts}`);
-	}
-
-	if (signalDetails.symbol.endsWith('USD')) {
-		if (!signalDetails.order_price) {
-			const error = new Error(`order_price must be in request body for inverse contracts`);
-			error.http_status = 400;
-			error.http_response = `order_price must be in request body for inverse contracts`;
-			throw error;
-		} else {
-			totalOrderQty = signalDetails.contracts * signalDetails.order_price ;
-			return totalOrderQty;
-		}
-
-	} else {
-		totalOrderQty = signalDetails.contracts;
-		return totalOrderQty;
-	}
+    if (request.body.auth_key === functions.config().auth.key)
+    {
+        functions.logger.info(`auth.key in request body valid`);
+        return next();
+    } else
+    {
+        const error = new Error('auth_key in request body not valid or not provided');
+        error.http_status = 403;
+        error.http_response = 'Unauthorized';
+        return next(error);
+    }
 
 }
 
-function round(value, decimals) {
-	return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
-}
+async function getTotalOrderQty(signalDetails)
+{
 
+    // If Inverse contracts convert to USD for bybit api trading view sends it as coin amount
+    let totalOrderQty;
 
-function getByBitClient(symbol, bot_number) {
+    // When trading view goes change market directions it sends the entire size in contracts need to convert to the
+    // correct order size when changing directions
+    if ((signalDetails.prev_market_position === 'short' && signalDetails.market_position === 'long') ||
+        (signalDetails.prev_market_position === 'long' && signalDetails.market_position === 'short'))
+    {
+        signalDetails.contracts = round((signalDetails.contracts - signalDetails.prev_market_position_size), 6);
+        functions.logger.info(`Position changed directions updating contract size to ${signalDetails.contracts}`);
+    }
 
-	functions.logger.debug('Getting bybit client');
+    if (signalDetails.symbol.endsWith('USD'))
+    {
+        if (!signalDetails.order_price)
+        {
+            const error = new Error(`order_price must be in request body for inverse contracts`);
+            error.http_status = 400;
+            error.http_response = `order_price must be in request body for inverse contracts`;
+            throw error;
+        } else
+        {
+            totalOrderQty = signalDetails.contracts * signalDetails.order_price;
+            return totalOrderQty;
+        }
 
-	// Use api and secret key for bot number passed in
-	const config = functions.config();
-	let bot_config_name = 'bot_' + bot_number;
-
-	if (!config[bot_config_name]) {
-		const error = new Error(`bot ${bot_config_name} not found in config`);
-		error.http_status = 400;
-		error.http_response = `bot ${bot_config_name} not found in config`;
-		throw error;
-	}
-
-	let use_live_mode = config[bot_config_name]['mode'] === 'live';
-
-	// Get the right client for the symbol in the request
-	if (symbol.endsWith("USDT")) {
-		return new LinearClient(config[bot_config_name]['api_key'], config[bot_config_name]['secret_key'], use_live_mode);
-	} else {
-		return new InverseClient(config[bot_config_name]['api_key'], config[bot_config_name]['secret_key'], use_live_mode);
-	}
-
-}
-
-async function validateRequestBody(signalDetails) {
-
-	functions.logger.debug('Validating Request Body');
-
-	// Check that all required parameters are in request body
-	const bodyParameters = ['bot', 'order', 'symbol', 'contracts', 'leverage', 'market_position'];
-
-	for(const parameter of bodyParameters) {
-		if (!signalDetails[parameter]) {
-			const error = new Error(`Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`);
-			error.http_status = 400;
-			error.http_response = `Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`;
-			throw error;
-		}
-	}
-
-	if (signalDetails.leverage < 1 || signalDetails.leverage > 100) {
-		const error = new Error('leverage field must be set between 1 and 100 in request body');
-		error.http_status = 400;
-		error.http_response = 'leverage field must be set between 1 and 100 in request body';
-		throw error;
-	}
-
-	if (signalDetails.order !== 'buy' && signalDetails.order !== 'sell') {
-		const error = new Error('order field must be set to either buy or sell');
-		error.http_status = 400;
-		error.http_response = 'order field must be set to either buy or sell';
-		throw error;
-	}
-
-	if (signalDetails.contracts < 0) {
-		const error = new Error('contracts field must be positive number');
-		error.http_status = 400;
-		error.http_response = 'contracts field must be positive number';
-		throw error;
-	}
-
-	if (signalDetails.order_price && signalDetails.order_price < 0) {
-		const error = new Error('order_price field must be positive number');
-		error.http_status = 400;
-		error.http_response = 'order_price field must be positive number';
-		throw error;
-	}
-
-	if (signalDetails.market_position !== 'long' && signalDetails.market_position !== 'short' &&
-		signalDetails.market_position !== 'flat') {
-		const error = new Error('market_position field must be long, short, or flat');
-		error.http_status = 400;
-		error.http_response = 'market_position field must be long, short, or flat';
-		throw error;
-	}
-
-	if (signalDetails.prev_market_position) {
-		if (signalDetails.prev_market_position !== 'long' && signalDetails.prev_market_position !== 'short' &&
-			signalDetails.prev_market_position !== 'flat') {
-			const error = new Error('prev_market_position field must be long, short, or flat');
-			error.http_status = 400;
-			error.http_response = 'prev_market_position field must be long, short, or flat';
-			throw error;
-		}
-	}
-
-	if (signalDetails.prev_market_position_size) {
-		if (signalDetails.prev_market_position_size < 0) {
-			const error = new Error('prev_market_position_size field must be positive number');
-			error.http_status = 400;
-			error.http_response = 'prev_market_position_size field must be positive number';
-			throw error;
-		}
-	}
-
+    } else
+    {
+        totalOrderQty = signalDetails.contracts;
+        return totalOrderQty;
+    }
 
 }
 
-async function cancelAll(client, data) {
+function round(value, decimals)
+{
+    return Number(Math.round(value + 'e' + decimals) + 'e-' + decimals);
+}
 
-	functions.logger.debug(`Canceling all orders ${JSON.stringify(data)}`);
 
-	//
-	// Cancel ALL active orders
-	//
+function getByBitClient(symbol, bot_number)
+{
 
-	functions.logger.debug(`Canceling all active orders ${JSON.stringify(data)}`);
-	await client.cancelAllActiveOrders(data).then((cancelAllActiveOrdersResponse) => {
-		if (cancelAllActiveOrdersResponse.ret_code !== 0 ) {
-			const error = new Error(`Error canceling all active orders ${cancelAllActiveOrdersResponse.ret_msg}`);
-			error.http_status = 500;
-			error.http_response = 'Error canceling all active orders';
-			throw error;
-		}
-		return true;
-	}).catch((error) => {
-		error.http_status = 500;
-		error.http_response = 'Error canceling all active orders';
-		throw error;
-	});
+    functions.logger.debug('Getting bybit client');
 
-	functions.logger.debug(`Canceling all conditional orders ${JSON.stringify(data)}`);
-	await client.cancelAllConditionalOrders(data).then((cancelAllConditionalOrdersResponse) => {
-		if (cancelAllConditionalOrdersResponse.ret_code !== 0 ) {
-			const error = new Error(`Error canceling all conditional orders ${cancelAllConditionalOrdersResponse.ret_msg}`);
-			error.http_status = 500;
-			error.http_response = 'Error canceling all conditional orders';
-			throw error;
-		}
-		return true;
-	}).catch((error) => {
-		error.http_status = 500;
-		error.http_response = 'Error canceling all conditional orders';
-		throw error;
-	});
+    // Use api and secret key for bot number passed in
+    const config = functions.config();
+    let bot_config_name = 'bot_' + bot_number;
+
+    if (!config[bot_config_name])
+    {
+        const error = new Error(`bot ${bot_config_name} not found in config`);
+        error.http_status = 400;
+        error.http_response = `bot ${bot_config_name} not found in config`;
+        throw error;
+    }
+
+    let use_live_mode = config[bot_config_name]['mode'] === 'live';
+
+    // Get the right client for the symbol in the request
+    if (symbol.endsWith("USDT"))
+    {
+        return new LinearClient(config[bot_config_name]['api_key'], config[bot_config_name]['secret_key'], use_live_mode);
+    } else
+    {
+        return new InverseClient(config[bot_config_name]['api_key'], config[bot_config_name]['secret_key'], use_live_mode);
+    }
 
 }
 
-async function getCurrentPosition(client, data) {
+function getBinanceClient(bot_number)
+{
+    functions.logger.debug('Getting binance client');
 
-	functions.logger.debug(`Getting current position ${JSON.stringify(data)}`);
-	return await client.getPosition(data).then((positionsResponse) => {
-		functions.logger.debug(`Positions response ${JSON.stringify(positionsResponse)}`)
-		let currentPosition = null;
+    // Use api and secret key for bot number passed in
+    const config = functions.config();
+    let bot_config_name = 'bot_' + bot_number;
 
-		// API response is slightly different between Inverse and USDT
-		if (data.symbol.endsWith("USDT")) {
+    if (!config[bot_config_name])
+    {
+        const error = new Error(`bot ${bot_config_name} not found in config`);
+        error.http_status = 400;
+        error.http_response = `bot ${bot_config_name} not found in config`;
+        throw error;
+    }
 
-			let opposite_position_side;
-			if (data.order_side === "buy" || data.order_side === "Buy") {
-				opposite_position_side = "Sell"
-			} else {
-				opposite_position_side = "Buy"
-			}
+    let use_live_mode = config[bot_config_name]['mode'] === 'live';
 
-			for (let i = 0; i < positionsResponse.result.length; ++i) {
-				const position = positionsResponse.result[i];
-
-				if (position.symbol === data.symbol && position.side === opposite_position_side) {
-					currentPosition = position;
-					return currentPosition;
-				}
-			}
-		} else {
-			currentPosition = positionsResponse.result;
-			return currentPosition;
-		}
-		return null;
-	}).catch((error) => {
-		error.http_status = 500;
-		error.http_response = 'Error getting current position';
-		throw error;
-	});
+    return new Binance().options({
+        APIKEY: config[bot_config_name]['api_key'],
+        APISECRET: config[bot_config_name]['secret_key']
+    });
 }
 
-async function closePreviousPosition(currentPosition, client) {
-	if (currentPosition.side !== "None") {
-		functions.logger.debug('Closing previous position');
-		const closeOrderType = currentPosition.side === "Buy" ? "Sell" : "Buy";
-		const closingOrder =
-		{
-			side: closeOrderType,
-			symbol: currentPosition.symbol,
-			order_type: "Market",	// Limit, for Buy lower than current market price triggers, for Sell higher than market price triggers
-			time_in_force: "ImmediateOrCancel",
-			reduce_only: true,
-			qty: currentPosition.size,
-			close_on_trigger: true,
-		};
+async function validateRequestBody(signalDetails)
+{
+    functions.logger.debug('Validating Request Body');
 
-		// Close Previous order
-		return await client.placeActiveOrder(closingOrder).then((closeActiveOrderResponse) => {
-			if (closeActiveOrderResponse.ret_code !== 0 ) {
-				const error = new Error(`Error placing order to close previous position ${closeActiveOrderResponse.ret_msg}`);
-				error.http_status = 500;
-				error.http_response = 'Error placing order to close previous position';
-				throw error;
-			}
-			functions.logger.info(`ClosePreviousPosition: ${closeActiveOrderResponse.result.symbol} ${closeActiveOrderResponse.result.side} ${closeActiveOrderResponse.result.price} ${closeActiveOrderResponse.result.qty}`);
-			return true;
-		}).catch((error) => {
-			error.http_status = 500;
-			error.http_response = 'Error placing order to close previous position';
-			throw error;
-		});
-	}
-	else {
-		return true;
-	}
+    // Check that all required parameters are in request body
+    const bodyParameters = ['bot', 'order', 'symbol', 'contracts', 'leverage', 'market_position'];
+
+    for (const parameter of bodyParameters)
+    {
+        if (!signalDetails[parameter])
+        {
+            const error = new Error(`Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`);
+            error.http_status = 400;
+            error.http_response = `Missing field ${parameter} in request body ${JSON.stringify(signalDetails)}`;
+            throw error;
+        }
+    }
+
+    if (signalDetails.leverage < 1 || signalDetails.leverage > 100)
+    {
+        const error = new Error('leverage field must be set between 1 and 100 in request body');
+        error.http_status = 400;
+        error.http_response = 'leverage field must be set between 1 and 100 in request body';
+        throw error;
+    }
+
+    if (signalDetails.order !== 'buy' && signalDetails.order !== 'sell')
+    {
+        const error = new Error('order field must be set to either buy or sell');
+        error.http_status = 400;
+        error.http_response = 'order field must be set to either buy or sell';
+        throw error;
+    }
+
+    if (signalDetails.contracts < 0)
+    {
+        const error = new Error('contracts field must be positive number');
+        error.http_status = 400;
+        error.http_response = 'contracts field must be positive number';
+        throw error;
+    }
+
+    if (signalDetails.order_price && signalDetails.order_price < 0)
+    {
+        const error = new Error('order_price field must be positive number');
+        error.http_status = 400;
+        error.http_response = 'order_price field must be positive number';
+        throw error;
+    }
+
+    if (signalDetails.market_position !== 'long' && signalDetails.market_position !== 'short' &&
+        signalDetails.market_position !== 'flat')
+    {
+        const error = new Error('market_position field must be long, short, or flat');
+        error.http_status = 400;
+        error.http_response = 'market_position field must be long, short, or flat';
+        throw error;
+    }
+
+    if (signalDetails.prev_market_position)
+    {
+        if (signalDetails.prev_market_position !== 'long' && signalDetails.prev_market_position !== 'short' &&
+            signalDetails.prev_market_position !== 'flat')
+        {
+            const error = new Error('prev_market_position field must be long, short, or flat');
+            error.http_status = 400;
+            error.http_response = 'prev_market_position field must be long, short, or flat';
+            throw error;
+        }
+    }
+
+    if (signalDetails.prev_market_position_size)
+    {
+        if (signalDetails.prev_market_position_size < 0)
+        {
+            const error = new Error('prev_market_position_size field must be positive number');
+            error.http_status = 400;
+            error.http_response = 'prev_market_position_size field must be positive number';
+            throw error;
+        }
+    }
+
+
+}
+
+async function cancelAll(client, signalDetails)
+{
+    functions.logger.debug(`Canceling all orders ${JSON.stringify(signalDetails)}`);
+    const config = functions.config();
+    const platform = config[`bot_${signalDetails.bot}`]['platform'];
+    //
+    // Cancel ALL active orders
+    //
+    if (platform === 'bybit')
+    {
+        functions.logger.debug(`Canceling all active orders ${JSON.stringify(signalDetails)}`);
+        await client.cancelAllActiveOrders(signalDetails).then((cancelAllActiveOrdersResponse) =>
+        {
+            if (cancelAllActiveOrdersResponse.ret_code !== 0)
+            {
+                const error = new Error(`Error canceling all active orders ${cancelAllActiveOrdersResponse.ret_msg}`);
+                error.http_status = 500;
+                error.http_response = 'Error canceling all active orders';
+                throw error;
+            }
+            return true;
+        }).catch((error) =>
+        {
+            error.http_status = 500;
+            error.http_response = 'Error canceling all active orders';
+            throw error;
+        });
+
+        functions.logger.debug(`Canceling all conditional orders ${JSON.stringify(signalDetails)}`);
+        await client.cancelAllConditionalOrders(signalDetails).then((cancelAllConditionalOrdersResponse) =>
+        {
+            if (cancelAllConditionalOrdersResponse.ret_code !== 0)
+            {
+                const error = new Error(`Error canceling all conditional orders ${cancelAllConditionalOrdersResponse.ret_msg}`);
+                error.http_status = 500;
+                error.http_response = 'Error canceling all conditional orders';
+                throw error;
+            }
+            return true;
+        }).catch((error) =>
+        {
+            error.http_status = 500;
+            error.http_response = 'Error canceling all conditional orders';
+            throw error;
+        });
+    }
+    else if (platform === 'binance')
+    {
+        functions.logger.debug(`${signalDetails.symbol} ----------------------------------------------`);
+        await client.cancelAll(signalDetails.symbol).then((info, info2) =>
+        {
+            functions.logger.error(JSON.stringify(info));
+            functions.logger.info(JSON.stringify(info2));
+            return true;
+        }).catch((error) =>
+        {
+            const msg = JSON.parse(error.body);
+            //functions.logger.error(msg.code);
+            if (msg.code === -2011)    // Nothing to cancel
+            {
+                functions.logger.info(`Nothing to cancel... ${JSON.stringify(msg)}`);
+                return true;
+            }
+            else
+            {
+                functions.logger.error(JSON.stringify(error));
+                error.http_status = 500;
+                error.http_response = 'Error canceling all orders';
+                throw error;
+            }
+        });
+    }
+    else
+    {
+        error.http_status = 500;
+        error.http_response = 'Platform not defined';
+        throw error;
+    }
+}
+
+async function getCurrentPosition(client, signalDetails, data)
+{
+    const config = functions.config();
+    const platform = config[`bot_${signalDetails.bot}`]['platform'];
+    if (platform === 'bybit')
+    {
+        functions.logger.debug(`Getting current position ${JSON.stringify(data)}`);
+        return await client.getPosition(data).then((positionsResponse) =>
+        {
+            functions.logger.debug(`Positions response ${JSON.stringify(positionsResponse)}`)
+            let currentPosition = null;
+
+            // API response is slightly different between Inverse and USDT
+            if (data.symbol.endsWith("USDT"))
+            {
+
+                let opposite_position_side;
+                if (data.order_side === "buy" || data.order_side === "Buy")
+                {
+                    opposite_position_side = "Sell"
+                } else
+                {
+                    opposite_position_side = "Buy"
+                }
+
+                for (let i = 0; i < positionsResponse.result.length; ++i)
+                {
+                    const position = positionsResponse.result[i];
+
+                    if (position.symbol === data.symbol && position.side === opposite_position_side)
+                    {
+                        currentPosition = position;
+                        return currentPosition;
+                    }
+                }
+            } else
+            {
+                currentPosition = positionsResponse.result;
+                return currentPosition;
+            }
+            return null;
+        }).catch((error) =>
+        {
+            error.http_status = 500;
+            error.http_response = 'Error getting current position';
+            throw error;
+        });
+    }
+    else if (platform === 'binance')
+    {
+        functions.logger.debug(`Getting current position ${JSON.stringify(data)}`);
+        const openOrders = await binance.openOrders(data.symbol);
+        functions.logger.debug(`openOrders ${JSON.stringify(openOrders)}`);
+        return openOrders;
+    }
+    else
+    {
+        error.http_status = 500;
+        error.http_response = 'Platform not defined';
+        throw error;
+    }
+}
+
+async function closePreviousPosition(signalDetails, currentPosition, client)
+{
+    const config = functions.config();
+    const platform = config[`bot_${signalDetails.bot}`]['platform'];
+    if (platform === 'bybit')
+    {
+        if (currentPosition.side !== "None")
+        {
+            functions.logger.debug('Closing previous position');
+            const closeOrderType = currentPosition.side === "Buy" ? "Sell" : "Buy";
+            const closingOrder =
+            {
+                side: closeOrderType,
+                symbol: currentPosition.symbol,
+                order_type: "Market",	// Limit, for Buy lower than current market price triggers, for Sell higher than market price triggers
+                time_in_force: "ImmediateOrCancel",
+                reduce_only: true,
+                qty: currentPosition.size,
+                close_on_trigger: true,
+            };
+
+            // Close Previous order
+            return await client.placeActiveOrder(closingOrder).then((closeActiveOrderResponse) =>
+            {
+                if (closeActiveOrderResponse.ret_code !== 0)
+                {
+                    const error = new Error(`Error placing order to close previous position ${closeActiveOrderResponse.ret_msg}`);
+                    error.http_status = 500;
+                    error.http_response = 'Error placing order to close previous position';
+                    throw error;
+                }
+                functions.logger.info(`ClosePreviousPosition: ${closeActiveOrderResponse.result.symbol} ${closeActiveOrderResponse.result.side} ${closeActiveOrderResponse.result.price} ${closeActiveOrderResponse.result.qty}`);
+                return true;
+            }).catch((error) =>
+            {
+                error.http_status = 500;
+                error.http_response = 'Error placing order to close previous position';
+                throw error;
+            });
+        }
+        else
+        {
+            return true;
+        }
+    }
+    else if (platform === 'binance')
+    {
+        return false;
+    }
+    else
+    {
+        error.http_status = 500;
+        error.http_response = 'Platform not defined';
+        throw error;
+    }
+
 }
 
 async function placeNewOrder(response, client, orderDetails, conditionalOrderBuffer = null, tradingStopMultiplier = null,
-							 tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null) {
-	return await client.placeActiveOrder(orderDetails).then(async (placeActiveOrderResponse) => {
-		functions.logger.info(`Place active order response ${JSON.stringify(placeActiveOrderResponse)}`);
-		if (placeActiveOrderResponse.ret_code === 0) {
-			if (conditionalOrderBuffer !== 0 || (tradingStopMultiplier === 0 && tradingStopActivationMultiplier === 0 &&
-				stopLossMargin === 0 && takeProfitMargin === 0)) {
-				return placeActiveOrderResponse;
-			}
-			else {
-				//await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier,
-				//	tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
-				return placeActiveOrderResponse;
-			}
-		}
-		return placeActiveOrderResponse;
-	}).catch((error) => {
-		error.http_status = 500;
-		error.http_response = 'Place active order Error';
-		throw error;
-	});
+    tradingStopActivationMultiplier = null, stopLossMargin = null, takeProfitMargin = null)
+{
+    return await client.placeActiveOrder(orderDetails).then(async (placeActiveOrderResponse) =>
+    {
+        functions.logger.info(`Place active order response ${JSON.stringify(placeActiveOrderResponse)}`);
+        if (placeActiveOrderResponse.ret_code === 0)
+        {
+            if (conditionalOrderBuffer !== 0 || (tradingStopMultiplier === 0 && tradingStopActivationMultiplier === 0 &&
+                stopLossMargin === 0 && takeProfitMargin === 0))
+            {
+                return placeActiveOrderResponse;
+            }
+            else
+            {
+                //await secureTransaction(response, placeActiveOrderResponse, client, orderDetails, tradingStopMultiplier,
+                //	tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin);
+                return placeActiveOrderResponse;
+            }
+        }
+        return placeActiveOrderResponse;
+    }).catch((error) =>
+    {
+        error.http_status = 500;
+        error.http_response = 'Place active order Error';
+        throw error;
+    });
 }
 
-async function stopOrder({ response, client, signalDetails }) {
-	try {
-		await cancelAll(client, { symbol: signalDetails.symbol });
+async function stopOrder({ response, client, signalDetails })
+{
+    try
+    {
+        await cancelAll(client, signalDetails);
 
-		// Current Position
-		const currentPosition = await getCurrentPosition(client, { symbol: signalDetails.symbol, order_side: signalDetails.order });
+        const config = functions.config();
+        const platform = config[`bot_${signalDetails.bot}`]['platform'];
+        if (platform === 'bybit')
+        {
+            // Current Position
+            const currentPosition = await getCurrentPosition(client, signalDetails, { symbol: signalDetails.symbol, order_side: signalDetails.order });
 
-		// Close Previous Order
-		if (currentPosition.size > 0) {
-			const success = await closePreviousPosition(currentPosition, client);
-			success ? response.status(200) : response.status(500);
-			response.status(200).send(`${signalDetails.order} order placed successfully`);
-		}
-		else {
-			functions.logger.info('There is no current position open')
-			response.status(200).send(`There is no current position open`);
-		}
-	}
-	catch (error) {
-		error.http_status = 500;
-		error.http_response = 'Stop order error';
-		throw error;
-	}
+            // Close Previous Order
+            if (currentPosition.size > 0)
+            {
+                const success = await closePreviousPosition(signalDetails, currentPosition, client);
+                success ? response.status(200) : response.status(500);
+                response.status(200).send(`${signalDetails.order} order placed successfully`);
+            }
+            else
+            {
+                functions.logger.info('There is no current position open')
+                response.status(200).send(`There is no current position open`);
+            }
+        }
+        else if (platform === 'binance')
+        {
+            return;
+        }
+        else
+        {
+            error.http_status = 500;
+            error.http_response = 'Platform not defined';
+            throw error;
+        }
+    }
+    catch (error)
+    {
+        error.http_status = 500;
+        error.http_response = 'Stop order error';
+        throw error;
+    }
 
 }
 
-async function createOrder({ response, client, orderDetails, conditionalOrderBuffer = null,
-							   tradingStopMultiplier = null, tradingStopActivationMultiplier = null,
-							   stopLossMargin = null, takeProfitMargin = null }) {
+async function createOrder({ response, signalDetails, client, orderDetails, conditionalOrderBuffer = null,
+    tradingStopMultiplier = null, tradingStopActivationMultiplier = null,
+    stopLossMargin = null, takeProfitMargin = null })
+{
+    const config = functions.config();
+    const platform = config[`bot_${signalDetails.bot}`]['platform'];
+    if (platform === 'bybit')
+    {
+        await cancelAll(client, signalDetails);
+        // Market Order
+        orderDetails.order_type = "Market";
 
-	await cancelAll(client, { symbol: orderDetails.symbol });
+        // Current Position
+        const currentPosition = await getCurrentPosition(client, signalDetails, { symbol: orderDetails.symbol, order_side: orderDetails.side });
+        if (currentPosition)
+        {
 
-	// Market Order
-	orderDetails.order_type = "Market";
+            // If opposite side position exists for symbol close that position before opening opposite position
+            if (closeOppositeSidePositions && currentPosition.side !== orderDetails.side && currentPosition.size > 0)
+            {
+                functions.logger.info('Current position is not the same side as requested closing opposite side position');
+                await closePreviousPosition(signalDetails, currentPosition, client);
+            }
 
-	// Current Position
-	const currentPosition = await getCurrentPosition(client, { symbol: orderDetails.symbol, order_side: orderDetails.side });
-	if (currentPosition) {
+        }
 
-		// If opposite side position exists for symbol close that position before opening opposite position
-		if (closeOppositeSidePositions && currentPosition.side !== orderDetails.side && currentPosition.size > 0) {
-			functions.logger.info('Current position is not the same side as requested closing opposite side position');
-			await closePreviousPosition(currentPosition, client);
-		}
+        // Update Leverage
+        functions.logger.debug(`Setting User leverage to ${orderDetails.leverage}`);
 
-	}
+        // HACK TEST NET API leverage change request parameters are different from LIVE NET API
+        // This is only needed until ByBit promotes their code to live.
+        let setUserLeverageRequest;
+        if (orderDetails.symbol.endsWith("USD"))
+        {
+            setUserLeverageRequest = { symbol: orderDetails.symbol, leverage: orderDetails.leverage };
+        } else
+        {
+            setUserLeverageRequest = { symbol: orderDetails.symbol, buy_leverage: orderDetails.leverage, sell_leverage: orderDetails.leverage };
+        }
 
-	// Update Leverage
-	functions.logger.debug(`Setting User leverage to ${orderDetails.leverage}`);
+        await client.setUserLeverage(setUserLeverageRequest).then((changeLeverageResponse) =>
+        {
+            functions.logger.debug(JSON.stringify(changeLeverageResponse))
+            if (changeLeverageResponse.ret_code !== 0 && changeLeverageResponse.ret_code !== 34036)
+            {
+                const error = new Error(`Error changing leverage ${changeLeverageResponse.ret_msg}`);
+                error.http_status = 500;
+                error.http_response = 'Error changing leverage';
+                throw error;
+            }
+            return true;
+        }).catch((error) =>
+        {
+            error.http_status = 500;
+            throw error;
+        });
 
-	// HACK TEST NET API leverage change request parameters are different from LIVE NET API
-	// This is only needed until ByBit promotes their code to live.
-	let setUserLeverageRequest;
-	if (orderDetails.symbol.endsWith("USD")) {
-		setUserLeverageRequest = { symbol: orderDetails.symbol, leverage: orderDetails.leverage};
-	} else {
-		setUserLeverageRequest = { symbol: orderDetails.symbol, buy_leverage: orderDetails.leverage, sell_leverage: orderDetails.leverage };
-	}
+        // New Order
+        functions.logger.debug(`Placing order for ${JSON.stringify(orderDetails)}`);
+        await placeNewOrder(response, client, orderDetails, conditionalOrderBuffer, tradingStopMultiplier,
+            tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin).then((placeActiveOrderResponse) =>
+            {
+                if (placeActiveOrderResponse.ret_code !== 0)
+                {
+                    const error = new Error(`Error placing order ${placeActiveOrderResponse.ret_msg}`);
+                    error.http_status = 500;
+                    error.http_response = 'Error placing order';
+                    throw error;
+                }
+                return true;
+            }).catch((error) =>
+            {
+                error.http_status = 500;
+                throw error;
+            });
 
-	await client.setUserLeverage(setUserLeverageRequest).then((changeLeverageResponse) => {
-		functions.logger.debug(JSON.stringify(changeLeverageResponse))
-		if (changeLeverageResponse.ret_code !== 0 && changeLeverageResponse.ret_code !== 34036 ) {
-			const error = new Error(`Error changing leverage ${changeLeverageResponse.ret_msg}`);
-			error.http_status = 500;
-			error.http_response = 'Error changing leverage';
-			throw error;
-		}
-		return true;
-	}).catch((error) => {
-		error.http_status = 500;
-		throw error;
-	});
+        response.status(200).send(`${orderDetails.side} Order Placed Successfully`);
+        return true;
+    }
+    else if (platform === 'binance')
+    {
+        await cancelAll(client, signalDetails);
 
-	// New Order
-	functions.logger.debug(`Placing order for ${JSON.stringify(orderDetails)}`);
-	await placeNewOrder(response, client, orderDetails, conditionalOrderBuffer, tradingStopMultiplier,
-		tradingStopActivationMultiplier, stopLossMargin, takeProfitMargin).then((placeActiveOrderResponse) => {
-		if (placeActiveOrderResponse.ret_code !== 0 ) {
-			const error = new Error(`Error placing order ${placeActiveOrderResponse.ret_msg}`);
-			error.http_status = 500;
-			error.http_response = 'Error placing order';
-			throw error;
-		}
-		return true;
-	}).catch((error) => {
-		error.http_status = 500;
-		throw error;
-	});
+        functions.logger.debug(`Placing order for ${JSON.stringify(orderDetails)}`);
+        const totalOrderQty = await getTotalOrderQty(signalDetails).catch();
+        functions.logger.info(totalOrderQty);
 
-	response.status(200).send(`${orderDetails.side} Order Placed Successfully`);
-	return true;
+        if (orderDetails.side === 'Buy')
+        {
+            /*
+            await client.marketBuy(orderDetails.symbol, totalOrderQty).then((info, info2) =>
+            {
+                functions.logger.info(JSON.stringify(info));
+                return true;
+            }).catch((error) =>
+            {
+                const msg = JSON.parse(error.body);
+                functions.logger.error(msg);
+                functions.logger.error(JSON.stringify(error));
+                error.http_status = 500;
+                error.http_response = 'Error canceling all orders';
+                throw error;
+            });
+            */
+        }
+        else if (orderDetails.side === 'Sell')
+        {
+            /*
+            await client.marketSell(orderDetails.symbol, totalOrderQty).then((info, info2) =>
+            {
+                functions.logger.info(JSON.stringify(info));
+                return true;
+            }).catch((error) =>
+            {
+                const msg = JSON.parse(error.body);
+                functions.logger.error(msg);
+                functions.logger.error(JSON.stringify(error));
+                error.http_status = 500;
+                error.http_response = 'Error canceling all orders';
+                throw error;
+            });
+            */
+        }
+        else
+        {
+            const msg = `Invalid orderDetails.side: ${orderDetails.side}`;
+            const error = new Error(msg);
+            error.http_status = 500;
+            error.http_response = msg;
+            throw error;
+        }
 
+        response.status(200).send(`${orderDetails.side} Order Placed Successfully`);
+        return true;
+    }
+
+    response.status(500).send(`Platform for bot ${signalDetails.bot} not defined`);
+    return false;
 }
 
 // async function secureTransaction(response, placeActiveOrderResponse, client, orderDetails,

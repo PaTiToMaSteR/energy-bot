@@ -73,6 +73,21 @@ Content-Type: application/json
     "leverage": ""
 }
 ```
+As example in TradingView
+```
+{
+  "bot": "REPLACE_WITH_YOUR_BOT_NUMBER",
+  "order": "{{strategy.order.action}}",
+  "symbol": "{{ticker}}",
+  "contracts": "{{strategy.order.contracts}}",
+  "order_price": "{{strategy.order.price}}",
+  "market_position": "{{strategy.market_position}}",
+  "prev_market_position": "{{strategy.prev_market_position}}",
+  "prev_market_position_size": "{{strategy.prev_market_position_size}}",
+  "auth_key": "REPLACE_WITH_YOUR_KEY",
+  "leverage": "REPLACE_WITH_YOU_LEVERAGE_X"
+}
+```
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
