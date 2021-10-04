@@ -152,6 +152,7 @@ Deploy command must always be run for any config values to take
 cd %USERPROFILE% # for windows
 cd $HOME # for mac os
 cd energy-bot
+firebase functions:config:set bot_1.platform="bybit or binance"
 firebase functions:config:set bot_1.api_key="REPLACE_WITH_BYBIT_API_KEY"
 firebase functions:config:set bot_1.secret_key="REPLACE_WITH_BYBIT_SECRET_KEY"
 firebase functions:config:set bot_1.mode="'test' for testnet bybit or 'live' for normal bybit"
