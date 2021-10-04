@@ -2,12 +2,13 @@ const functions = require("firebase-functions");
 const { InverseClient, LinearClient } = require("bybit-api");
 const Binance = require('node-binance-api');
 const admin = require('firebase-admin');
+const axios = require('axios');
 
 admin.initializeApp({
     credential: admin.credential.applicationDefault(),
 });
 
-const appVersion = "1.0.5.1";
+const appVersion = "1.0.6.2";
 
 let closeOppositeSidePositions = true; // If an order is received that is the opposite position it wil be closed.
 
@@ -360,58 +361,171 @@ app.post('/', async (request, response, next) =>
         else if (config[`bot_${signalDetails.bot}`]['platform'] === 'bybit')
         {
             client = getByBitClient(signalDetails.symbol, signalDetails.bot);
+
+            // Open long position
+            if (signalDetails.order === "buy" && signalDetails.market_position === "long")
+            {
+                functions.logger.info(`Opening long position: ${signalDetails.symbol}`);
+                await createOrder({
+                    response: response,
+                    signalDetails: signalDetails,
+                    client: client,
+                    orderDetails: orderDetails
+                });
+            }
+
+            // Open short position
+            else if (signalDetails.order === "sell" && signalDetails.market_position === "short")
+            {
+                functions.logger.info(`Opening short position: ${signalDetails.symbol}`);
+                await createOrder({
+                    response: response,
+                    signalDetails: signalDetails,
+                    client: client,
+                    orderDetails: orderDetails
+                });
+            }
+
+            // Close long position
+            else if (signalDetails.order === "sell" &&
+                (signalDetails.market_position === "long" || signalDetails.market_position === "flat"))
+            {
+                functions.logger.info(`Closing long position: ${signalDetails.symbol}`);
+                await stopOrder({
+                    response: response, client: client,
+                    signalDetails: signalDetails
+                });
+            }
+
+            // Close short position
+            else if (signalDetails.order === "buy" &&
+                (signalDetails.market_position === "short" || signalDetails.market_position === "flat"))
+            {
+                functions.logger.info(`Closing short position: ${signalDetails.symbol}`);
+                await stopOrder({
+                    response: response, client: client,
+                    signalDetails: signalDetails
+                });
+            }
         }
+        //
+        // Binance Spot Trading
+        //
         else if (config[`bot_${signalDetails.bot}`]['platform'] === 'binance')
         {
             client = getBinanceClient(signalDetails.bot);
-        }
 
-        // Open long position
-        if (signalDetails.order === "buy" && signalDetails.market_position === "long")
-        {
-            functions.logger.info(`Opening long position: ${signalDetails.symbol}`);
-            await createOrder({
-                response: response,
-                signalDetails: signalDetails,
-                client: client,
-                orderDetails: orderDetails
-            });
-        }
+            //let exchangeInfo = await client.exchangeInfo();
+            let exchangeInfo = await axios.get(`https://api.binance.com/api/v3/exchangeInfo?symbol=${signalDetails.symbol}`)
+                .then(response =>
+                {
+                    let minimums = {};
+                    for (let obj of response.data.symbols)
+                    {
+                        let filters = { status: obj.status };
+                        for (let filter of obj.filters)
+                        {
+                            if (filter.filterType === "MIN_NOTIONAL")
+                            {
+                                filters.minNotional = filter.minNotional;
+                            } else if (filter.filterType === "PRICE_FILTER")
+                            {
+                                filters.minPrice = filter.minPrice;
+                                filters.maxPrice = filter.maxPrice;
+                                filters.tickSize = filter.tickSize;
+                            } else if (filter.filterType === "LOT_SIZE")
+                            {
+                                filters.stepSize = filter.stepSize;
+                                filters.minQty = filter.minQty;
+                                filters.maxQty = filter.maxQty;
+                            }
+                        }
+                        //filters.baseAssetPrecision = obj.baseAssetPrecision;
+                        //filters.quoteAssetPrecision = obj.quoteAssetPrecision;
+                        filters.orderTypes = obj.orderTypes;
+                        filters.icebergAllowed = obj.icebergAllowed;
+                        minimums[obj.symbol] = filters;
+                    }
+                    console.log(minimums);
+                    //fs.writeFile("minimums.json", JSON.stringify(minimums, null, 4), function(err){});
+                    return minimums;
 
-        // Open short position
-        else if (signalDetails.order === "sell" && signalDetails.market_position === "short")
-        {
-            functions.logger.info(`Opening short position: ${signalDetails.symbol}`);
-            await createOrder({
-                response: response,
-                signalDetails: signalDetails,
-                client: client,
-                orderDetails: orderDetails
-            });
-        }
+                })
+                .catch(error =>
+                {
+                    functions.logger.error(`axios error: ${error}`);
+                });
+            functions.logger.debug(exchangeInfo);
+            //
+            // Correct the price
+            //
+            //{ "order": "buy", "symbol": "ADABUSD", "comment": "Blue Arrow", "contracts": "5", "order_price": "2.179", "market_position": "long", "market_position_size": "10", "prev_market_position": "long", "prev_market_position_size": "5", "auth_key": "PaTiToMaSteR", "leverage": "1", "bot": "1" }
+            let amount = 0;
+            // Set minimum order amount with minQty
+            if (amount < exchangeInfo[signalDetails.symbol].minQty) amount = exchangeInfo[signalDetails.symbol].minQty;
 
-        // Close long position
-        else if (signalDetails.order === "sell" &&
-            (signalDetails.market_position === "long" || signalDetails.market_position === "flat"))
-        {
-            functions.logger.info(`Closing long position: ${signalDetails.symbol}`);
-            await stopOrder({
-                response: response, client: client,
-                signalDetails: signalDetails
-            });
-        }
+            // Set minimum order amount with minNotional
+            if (signalDetails.order_price * amount < exchangeInfo[signalDetails.symbol].minNotional)
+            {
+                amount = exchangeInfo[signalDetails.symbol].minNotional / signalDetails.order_price;
+            }
+            // Round to stepSize
+            amount = parseFloat(client.roundStep(amount, exchangeInfo[signalDetails.symbol].stepSize));
+            //
+            // Double check
+            //
+            while (amount * signalDetails.order_price < exchangeInfo[signalDetails.symbol].minNotional)
+            {
+                amount += parseFloat(exchangeInfo[signalDetails.symbol].stepSize);
+                functions.logger.info(`correcting amount to ${amount}: ${amount * signalDetails.order_price}`);
+            }
 
-        // Close short position
-        else if (signalDetails.order === "buy" &&
-            (signalDetails.market_position === "short" || signalDetails.market_position === "flat"))
-        {
-            functions.logger.info(`Closing short position: ${signalDetails.symbol}`);
-            await stopOrder({
-                response: response, client: client,
-                signalDetails: signalDetails
-            });
-        }
+            functions.logger.info(`Spot ${signalDetails.order} of ${signalDetails.symbol} -> ${amount}`);
 
+            if (signalDetails.order === 'buy')
+            {
+                await client.marketBuy(signalDetails.symbol, amount).then((info) =>
+                {
+                    //functions.logger.debug(JSON.stringify(info));
+                    return true;
+                }).catch((error) =>
+                {
+                    const msg = JSON.parse(error.body);
+                    functions.logger.error(msg);
+                    functions.logger.error(JSON.stringify(error));
+                    error.http_status = 500;
+                    error.http_response = 'Error canceling all orders';
+                    throw error;
+                });
+            }
+            else if (signalDetails.order === 'sell')
+            {
+                await client.marketSell(signalDetails.symbol, amount).then((info) =>
+                {
+                    //functions.logger.debug(JSON.stringify(info));
+                    return true;
+                }).catch((error) =>
+                {
+                    const msg = JSON.parse(error.body);
+                    functions.logger.error(msg);
+                    functions.logger.error(JSON.stringify(error));
+                    error.http_status = 500;
+                    error.http_response = 'Error canceling all orders';
+                    throw error;
+                });
+            }
+            else
+            {
+                const msg = `Invalid signalDetails.order: ${signalDetails.order}`;
+                const error = new Error(msg);
+                error.http_status = 500;
+                error.http_response = msg;
+                throw error;
+            }
+
+            response.status(200).send(`${signalDetails.order} Order Placed Successfully`);
+            return true;
+        }
     } catch (error)
     {
         return next(error);
@@ -688,10 +802,9 @@ async function cancelAll(client, signalDetails)
     else if (platform === 'binance')
     {
         functions.logger.debug(`${signalDetails.symbol} ----------------------------------------------`);
-        await client.cancelAll(signalDetails.symbol).then((info, info2) =>
+        await client.cancelAll(signalDetails.symbol).then((info) =>
         {
-            functions.logger.error(JSON.stringify(info));
-            functions.logger.info(JSON.stringify(info2));
+            functions.logger.info(JSON.stringify(info));
             return true;
         }).catch((error) =>
         {
@@ -873,12 +986,12 @@ async function stopOrder({ response, client, signalDetails })
 {
     try
     {
-        await cancelAll(client, signalDetails);
-
         const config = functions.config();
         const platform = config[`bot_${signalDetails.bot}`]['platform'];
         if (platform === 'bybit')
         {
+            await cancelAll(client, signalDetails);
+
             // Current Position
             const currentPosition = await getCurrentPosition(client, signalDetails, { symbol: signalDetails.symbol, order_side: signalDetails.order });
 
@@ -996,58 +1109,6 @@ async function createOrder({ response, signalDetails, client, orderDetails, cond
     }
     else if (platform === 'binance')
     {
-        await cancelAll(client, signalDetails);
-
-        functions.logger.debug(`Placing order for ${JSON.stringify(orderDetails)}`);
-        const totalOrderQty = await getTotalOrderQty(signalDetails).catch();
-        functions.logger.info(totalOrderQty);
-
-        if (orderDetails.side === 'Buy')
-        {
-            /*
-            await client.marketBuy(orderDetails.symbol, totalOrderQty).then((info, info2) =>
-            {
-                functions.logger.info(JSON.stringify(info));
-                return true;
-            }).catch((error) =>
-            {
-                const msg = JSON.parse(error.body);
-                functions.logger.error(msg);
-                functions.logger.error(JSON.stringify(error));
-                error.http_status = 500;
-                error.http_response = 'Error canceling all orders';
-                throw error;
-            });
-            */
-        }
-        else if (orderDetails.side === 'Sell')
-        {
-            /*
-            await client.marketSell(orderDetails.symbol, totalOrderQty).then((info, info2) =>
-            {
-                functions.logger.info(JSON.stringify(info));
-                return true;
-            }).catch((error) =>
-            {
-                const msg = JSON.parse(error.body);
-                functions.logger.error(msg);
-                functions.logger.error(JSON.stringify(error));
-                error.http_status = 500;
-                error.http_response = 'Error canceling all orders';
-                throw error;
-            });
-            */
-        }
-        else
-        {
-            const msg = `Invalid orderDetails.side: ${orderDetails.side}`;
-            const error = new Error(msg);
-            error.http_status = 500;
-            error.http_response = msg;
-            throw error;
-        }
-
-        response.status(200).send(`${orderDetails.side} Order Placed Successfully`);
         return true;
     }
 
