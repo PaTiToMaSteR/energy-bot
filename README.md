@@ -89,7 +89,7 @@ As example in TradingView
   "leverage": "REPLACE_WITH_YOU_LEVERAGE_X"
 }
 
-The variable "usd" will be multiplied by order_prive overriding contracts variable, this is handy to modify alerts and as a fix of a TV bug (where doesn't trigger new buy/sell orders)!
+The variable "usd" will calculate with the order_price the amount of contracts overriding contracts variable from TV (no all tokens has step size defined, hence TV has a bug and stops triggering buy/sell orders!)
 ```
 Config to use BUSD in Binance for Spot Trading
 ![binance-spot-trading-config-with-BUSD.png](doc-imgs/binance-spot-trading-config-with-BUSD.png)

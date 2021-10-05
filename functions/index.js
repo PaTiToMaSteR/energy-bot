@@ -8,7 +8,7 @@ admin.initializeApp({
     credential: admin.credential.applicationDefault(),
 });
 
-const appVersion = "1.0.6.2";
+const appVersion = "1.0.6.3";
 
 let closeOppositeSidePositions = true; // If an order is received that is the opposite position it wil be closed.
 
@@ -466,28 +466,28 @@ app.post('/', async (request, response, next) =>
             //
             if (signalDetails.usd)
             {
-                amount = (1 / signalDetails.order_price) * signalDetails.usd;
-                functions.logger.info(`Overriding TV contracts variable with fixed usd amount in usd: ${signalDetails.usd} - contracts: ${amount}`);
+                amount = (1.0 / parseFloat(signalDetails.order_price)) * parseFloat(signalDetails.usd);
+                functions.logger.info(`Overriding TV contracts variable with fixed usd amount in usd: (1.0 / ${parseFloat(signalDetails.order_price)} * ${parseFloat(signalDetails.usd)} - contracts: ${amount}`);
             }
             else
             {
-                amount = signalDetails.contracts;
+                amount = parseFloat(signalDetails.contracts);
             }
             // Set minimum order amount with minQty
-            if (amount < exchangeInfo[signalDetails.symbol].minQty)
-                amount = exchangeInfo[signalDetails.symbol].minQty;
+            if (amount < parseFloat(exchangeInfo[signalDetails.symbol].minQty))
+                amount = parseFloat(exchangeInfo[signalDetails.symbol].minQty);
 
             // Set minimum order amount with minNotional
-            if (signalDetails.order_price * amount < exchangeInfo[signalDetails.symbol].minNotional)
+            if (parseFloat(signalDetails.order_price) * amount < parseFloat(exchangeInfo[signalDetails.symbol].minNotional))
             {
-                amount = exchangeInfo[signalDetails.symbol].minNotional / signalDetails.order_price;
+                amount = parseFloat(exchangeInfo[signalDetails.symbol].minNotional) / parseFloat(signalDetails.order_price);
             }
             // Round to stepSize
-            amount = parseFloat(client.roundStep(amount, exchangeInfo[signalDetails.symbol].stepSize));
+            amount = parseFloat(client.roundStep(amount, parseFloat(exchangeInfo[signalDetails.symbol].stepSize)));
             //
             // Double check
             //
-            while (amount * signalDetails.order_price <= (parseFloat(exchangeInfo[signalDetails.symbol].minNotional) + 1))
+            while (amount * parseFloat(signalDetails.order_price) <= (parseFloat(exchangeInfo[signalDetails.symbol].minNotional) + 1.0))
             {
                 amount += parseFloat(exchangeInfo[signalDetails.symbol].stepSize);
                 functions.logger.info(`correcting amount to ${amount} - price: ${amount * signalDetails.order_price}`);
