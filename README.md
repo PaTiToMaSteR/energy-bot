@@ -80,6 +80,7 @@ As example in TradingView
   "order": "{{strategy.order.action}}",
   "symbol": "{{ticker}}",
   "contracts": "{{strategy.order.contracts}}",
+  "usd": "100",
   "order_price": "{{strategy.order.price}}",
   "market_position": "{{strategy.market_position}}",
   "prev_market_position": "{{strategy.prev_market_position}}",
@@ -87,6 +88,8 @@ As example in TradingView
   "auth_key": "REPLACE_WITH_YOUR_KEY",
   "leverage": "REPLACE_WITH_YOU_LEVERAGE_X"
 }
+
+The variable "usd" will be multiplied by order_prive overriding contracts variable, this is handy to modify alerts and as a fix of a TV bug (where doesn't trigger new buy/sell orders)!
 ```
 Config to use BUSD in Binance for Spot Trading
 ![binance-spot-trading-config-with-BUSD.png](doc-imgs/binance-spot-trading-config-with-BUSD.png)

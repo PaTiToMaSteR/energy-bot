@@ -446,7 +446,7 @@ app.post('/', async (request, response, next) =>
                         filters.icebergAllowed = obj.icebergAllowed;
                         minimums[obj.symbol] = filters;
                     }
-                    console.log(minimums);
+                    //console.log(minimums);
                     //fs.writeFile("minimums.json", JSON.stringify(minimums, null, 4), function(err){});
                     return minimums;
 
@@ -455,14 +455,27 @@ app.post('/', async (request, response, next) =>
                 {
                     functions.logger.error(`axios error: ${error}`);
                 });
-            functions.logger.debug(exchangeInfo);
+            //functions.logger.debug(exchangeInfo);
             //
             // Correct the price
             //
             //{ "order": "buy", "symbol": "ADABUSD", "comment": "Blue Arrow", "contracts": "5", "order_price": "2.179", "market_position": "long", "market_position_size": "10", "prev_market_position": "long", "prev_market_position_size": "5", "auth_key": "PaTiToMaSteR", "leverage": "1", "bot": "1" }
             let amount = 0;
+            //
+            // Override TV contracts
+            //
+            if (signalDetails.usd)
+            {
+                amount = (1 / signalDetails.order_price) * signalDetails.usd;
+                functions.logger.info(`Overriding TV contracts variable with fixed usd amount in usd: ${signalDetails.usd} - contracts: ${amount}`);
+            }
+            else
+            {
+                amount = signalDetails.contracts;
+            }
             // Set minimum order amount with minQty
-            if (amount < exchangeInfo[signalDetails.symbol].minQty) amount = exchangeInfo[signalDetails.symbol].minQty;
+            if (amount < exchangeInfo[signalDetails.symbol].minQty)
+                amount = exchangeInfo[signalDetails.symbol].minQty;
 
             // Set minimum order amount with minNotional
             if (signalDetails.order_price * amount < exchangeInfo[signalDetails.symbol].minNotional)
@@ -474,12 +487,12 @@ app.post('/', async (request, response, next) =>
             //
             // Double check
             //
-            while (amount * signalDetails.order_price < exchangeInfo[signalDetails.symbol].minNotional)
+            while (amount * signalDetails.order_price <= (parseFloat(exchangeInfo[signalDetails.symbol].minNotional) + 1))
             {
                 amount += parseFloat(exchangeInfo[signalDetails.symbol].stepSize);
-                functions.logger.info(`correcting amount to ${amount}: ${amount * signalDetails.order_price}`);
+                functions.logger.info(`correcting amount to ${amount} - price: ${amount * signalDetails.order_price}`);
             }
-
+            amount = parseFloat(client.roundStep(amount, exchangeInfo[signalDetails.symbol].stepSize));
             functions.logger.info(`Spot ${signalDetails.order} of ${signalDetails.symbol} -> ${amount}`);
 
             if (signalDetails.order === 'buy')
