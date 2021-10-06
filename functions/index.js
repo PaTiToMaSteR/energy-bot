@@ -8,7 +8,7 @@ admin.initializeApp({
     credential: admin.credential.applicationDefault(),
 });
 
-const appVersion = "1.0.6.3";
+const appVersion = "1.0.6.5";
 
 let closeOppositeSidePositions = true; // If an order is received that is the opposite position it wil be closed.
 
@@ -460,7 +460,7 @@ app.post('/', async (request, response, next) =>
             // Correct the price
             //
             //{ "order": "buy", "symbol": "ADABUSD", "comment": "Blue Arrow", "contracts": "5", "order_price": "2.179", "market_position": "long", "market_position_size": "10", "prev_market_position": "long", "prev_market_position_size": "5", "auth_key": "PaTiToMaSteR", "leverage": "1", "bot": "1" }
-            let amount = 0;
+            let amount = 0.0;
             //
             // Override TV contracts
             //
@@ -483,7 +483,7 @@ app.post('/', async (request, response, next) =>
                 amount = parseFloat(exchangeInfo[signalDetails.symbol].minNotional) / parseFloat(signalDetails.order_price);
             }
             // Round to stepSize
-            amount = parseFloat(client.roundStep(amount, parseFloat(exchangeInfo[signalDetails.symbol].stepSize)));
+            amount = parseFloat(client.roundStep(amount, exchangeInfo[signalDetails.symbol].stepSize));
             //
             // Double check
             //
