@@ -513,7 +513,58 @@ app.post('/', async (request, response, next) =>
             }
             else if (signalDetails.order === 'sell')
             {
-                await client.marketSell(signalDetails.symbol, amount).then((info) =>
+                //
+                // Sell everything you've got
+                //
+                let totalAmount = 0;    // meaning... do not sell everything
+                if (parseFloat(signalDetails.market_position_size) === 0)
+                {
+                    totalAmount = await client.balance().then((balances) =>
+                    {
+                        let assetName;
+                        if (signalDetails.symbol.endsWith('BUSD'))
+                        {
+                            assetName = signalDetails.symbol.split('BUSD')[0];
+                        }
+                        else if (signalDetails.symbol.endsWith('USDT'))
+                        {
+                            assetName = signalDetails.symbol.split('USDT')[0];
+                        }
+                        else if (signalDetails.symbol.endsWith('USDC'))
+                        {
+                            assetName = signalDetails.symbol.split('USDC')[0];
+                        }
+                        //functions.logger.debug(`How much I have of ${assetName}`);
+
+                        if (assetName.length !== 0)
+                        {
+                            //
+                            // In Binance fees are lower if you have BNB, so we leave never sell all our BNB
+                            //
+                            if (signalDetails.symbol === 'BNBBUSD' || signalDetails.symbol === 'BNBUSDT' || signalDetails.symbol === 'USDC')
+                            {
+                                //functions.logger.debug(`Never selling all BNB ${signalDetails.symbol}`);
+                                return 0;
+                            }
+                            const obj = balances[assetName];
+                            return obj.available = parseFloat(obj.available);
+                        }
+                        return 0;
+                        //fs.writeFile("json/balance.json", JSON.stringify(global.balance, null, 4), (err)=>{});
+                    }).catch((error) =>
+                    {
+                        const msg = JSON.parse(error.body);
+                        functions.logger.error(msg);
+                        functions.logger.error(JSON.stringify(error));
+                        error.http_status = 500;
+                        error.http_response = 'Error canceling all orders';
+                        throw error;
+                    });
+                }
+                const amountToSell = totalAmount !== 0 ? totalAmount : amount;
+                functions.logger.debug(`totalAmount: ${totalAmount} amount: ${amount} totalAmount: ${totalAmount} signalDetails.market_position_size: ${signalDetails.market_position_size}`);
+
+                await client.marketSell(signalDetails.symbol, amountToSell).then((info) =>
                 {
                     //functions.logger.debug(JSON.stringify(info));
                     return true;
@@ -557,7 +608,6 @@ app.use((error, request, response, next) =>
 
 async function authValidator(request, response, next)
 {
-
     functions.logger.debug('Running auth validator');
 
     // TradingView does not support custom request headers adding basic auth key to request body to give basic
