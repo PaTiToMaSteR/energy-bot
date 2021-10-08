@@ -516,10 +516,11 @@ app.post('/', async (request, response, next) =>
                 //
                 // Sell everything you've got
                 //
+                /*
                 let totalAmount = 0;    // meaning... do not sell everything
                 if (parseFloat(signalDetails.market_position_size) === 0)
                 {
-                    totalAmount = await client.balance().then((balances) =>
+                    totalAmount = await client.balance().then((balances) => //(error, balances) =>
                     {
                         let assetName;
                         if (signalDetails.symbol.endsWith('BUSD'))
@@ -563,7 +564,8 @@ app.post('/', async (request, response, next) =>
                 }
                 const amountToSell = totalAmount !== 0 ? totalAmount : amount;
                 functions.logger.debug(`totalAmount: ${totalAmount} amount: ${amount} totalAmount: ${totalAmount} signalDetails.market_position_size: ${signalDetails.market_position_size}`);
-
+                */
+                amountToSell = amount;
                 await client.marketSell(signalDetails.symbol, amountToSell).then((info) =>
                 {
                     //functions.logger.debug(JSON.stringify(info));
@@ -586,7 +588,6 @@ app.post('/', async (request, response, next) =>
                 error.http_response = msg;
                 throw error;
             }
-
             response.status(200).send(`${signalDetails.order} Order Placed Successfully`);
             return true;
         }
@@ -599,12 +600,6 @@ app.post('/', async (request, response, next) =>
 
 });
 
-// error handler middleware
-app.use((error, request, response, next) =>
-{
-    functions.logger.error(error.message);
-    response.status(error.http_status || 500).send(error.http_response || 'Internal Server Error');
-});
 
 async function authValidator(request, response, next)
 {
