@@ -467,17 +467,22 @@ app.post('/', async (request, response, next) =>
             if (signalDetails.usd)
             {
                 amount = (1.0 / parseFloat(signalDetails.order_price)) * parseFloat(signalDetails.usd);
-                functions.logger.info(`Overriding TV contracts variable with fixed usd amount in usd: (1.0 / ${parseFloat(signalDetails.order_price)} * ${parseFloat(signalDetails.usd)} - contracts: ${amount}`);
+                functions.logger.info(`Overriding TV contracts variable with fixed usd amount in usd: (1.0 / ${parseFloat(signalDetails.order_price)}) * ${parseFloat(signalDetails.usd)} - contracts: ${amount}`);
             }
             else
             {
                 amount = parseFloat(signalDetails.contracts);
             }
+            //
+            // Round to stepSize
+            //
+            amount = parseFloat(client.roundStep(amount, exchangeInfo[signalDetails.symbol].stepSize));
             // Set minimum order amount with minQty
             if (amount < parseFloat(exchangeInfo[signalDetails.symbol].minQty))
                 amount = parseFloat(exchangeInfo[signalDetails.symbol].minQty);
-
+            //
             // Set minimum order amount with minNotional
+            //
             if (parseFloat(signalDetails.order_price) * amount < parseFloat(exchangeInfo[signalDetails.symbol].minNotional))
             {
                 amount = parseFloat(exchangeInfo[signalDetails.symbol].minNotional) / parseFloat(signalDetails.order_price);
