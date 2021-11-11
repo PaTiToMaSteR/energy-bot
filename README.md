@@ -86,10 +86,12 @@ As example in TradingView
   "prev_market_position": "{{strategy.prev_market_position}}",
   "prev_market_position_size": "{{strategy.prev_market_position_size}}",
   "auth_key": "REPLACE_WITH_YOUR_KEY",
-  "leverage": "REPLACE_WITH_YOU_LEVERAGE_X"
+  "leverage": "REPLACE_WITH_YOU_LEVERAGE_X",
+  "sellOnPositionSize0": "true"
 }
 
 The variable "usd" will calculate with the order_price the amount of contracts overriding contracts variable from TV (no all tokens has step size defined, hence TV has a bug and stops triggering buy/sell orders!)
+The variable "sellOnPositionSize0" will sell all tokens when the signal "sell" have been received
 ```
 Config to use BUSD in Binance for Spot Trading
 ![binance-spot-trading-config-with-BUSD.png](doc-imgs/binance-spot-trading-config-with-BUSD.png)

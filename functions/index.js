@@ -509,11 +509,20 @@ app.post('/', async (request, response, next) =>
                 }).catch((error) =>
                 {
                     const msg = JSON.parse(error.body);
-                    functions.logger.error(msg);
-                    functions.logger.error(JSON.stringify(error));
-                    error.http_status = 500;
-                    error.http_response = 'Error canceling all orders';
-                    throw error;
+
+                    if (msg.code === -2010)
+                    {
+                        functions.logger.info(msg.msg);
+                        return true;
+                    }
+                    else
+                    {
+                        functions.logger.error(msg);
+                        functions.logger.error(JSON.stringify(error));
+                        error.http_status = 500;
+                        error.http_response = 'Error canceling all orders';
+                        throw error;
+                    }
                 });
             }
             else if (signalDetails.order === 'sell')
@@ -521,60 +530,38 @@ app.post('/', async (request, response, next) =>
                 //
                 // Sell everything you've got
                 //
-                /*
-                let totalAmount = 0;    // meaning... do not sell everything
-                if (parseFloat(signalDetails.market_position_size) === 0)
+                let assetName;
+                let totalAmount = await client.balance().then((balances) =>
                 {
-                    totalAmount = await client.balance().then((balances) => //(error, balances) =>
+                    if (signalDetails.symbol.endsWith('BUSD'))
                     {
-                        let assetName;
-                        if (signalDetails.symbol.endsWith('BUSD'))
-                        {
-                            assetName = signalDetails.symbol.split('BUSD')[0];
-                        }
-                        else if (signalDetails.symbol.endsWith('USDT'))
-                        {
-                            assetName = signalDetails.symbol.split('USDT')[0];
-                        }
-                        else if (signalDetails.symbol.endsWith('USDC'))
-                        {
-                            assetName = signalDetails.symbol.split('USDC')[0];
-                        }
-                        //functions.logger.debug(`How much I have of ${assetName}`);
+                        assetName = signalDetails.symbol.split('BUSD')[0];
+                    }
+                    else if (signalDetails.symbol.endsWith('USDT'))
+                    {
+                        assetName = signalDetails.symbol.split('USDT')[0];
+                    }
+                    else if (signalDetails.symbol.endsWith('USDC'))
+                    {
+                        assetName = signalDetails.symbol.split('USDC')[0];
+                    }
+                    //functions.logger.debug(`How much I have of ${assetName}`);
 
-                        if (assetName.length !== 0)
-                        {
-                            //
-                            // In Binance fees are lower if you have BNB, so we leave never sell all our BNB
-                            //
-                            if (signalDetails.symbol === 'BNBBUSD' || signalDetails.symbol === 'BNBUSDT' || signalDetails.symbol === 'USDC')
-                            {
-                                //functions.logger.debug(`Never selling all BNB ${signalDetails.symbol}`);
-                                return 0;
-                            }
-                            const obj = balances[assetName];
-                            return obj.available = parseFloat(obj.available);
-                        }
-                        return 0;
-                        //fs.writeFile("json/balance.json", JSON.stringify(global.balance, null, 4), (err)=>{});
-                    }).catch((error) =>
+                    if (assetName.length !== 0)
                     {
-                        const msg = JSON.parse(error.body);
-                        functions.logger.error(msg);
-                        functions.logger.error(JSON.stringify(error));
-                        error.http_status = 500;
-                        error.http_response = 'Error canceling all orders';
-                        throw error;
-                    });
-                }
-                const amountToSell = totalAmount !== 0 ? totalAmount : amount;
-                functions.logger.debug(`totalAmount: ${totalAmount} amount: ${amount} totalAmount: ${totalAmount} signalDetails.market_position_size: ${signalDetails.market_position_size}`);
-                */
-                amountToSell = amount;
-                await client.marketSell(signalDetails.symbol, amountToSell).then((info) =>
-                {
-                    //functions.logger.debug(JSON.stringify(info));
-                    return true;
+                        //
+                        // In Binance fees are lower if you have BNB, so we leave never sell all our BNB
+                        //
+                        if (signalDetails.symbol === 'BNBBUSD' || signalDetails.symbol === 'BNBUSDT' || signalDetails.symbol === 'USDC')
+                        {
+                            //functions.logger.debug(`Never selling all BNB ${signalDetails.symbol}`);
+                            return 0;
+                        }
+                        const obj = balances[assetName];
+                        return obj.available = parseFloat(obj.available);
+                    }
+                    return 0;
+                    //fs.writeFile("json/balance.json", JSON.stringify(global.balance, null, 4), (err)=>{});
                 }).catch((error) =>
                 {
                     const msg = JSON.parse(error.body);
@@ -584,6 +571,50 @@ app.post('/', async (request, response, next) =>
                     error.http_response = 'Error canceling all orders';
                     throw error;
                 });
+
+                const amountToSell = (parseFloat(signalDetails.market_position_size) === 0 && signalDetails.sellOnPositionSize0 === "true") ? totalAmount : amount;
+                functions.logger.debug(`total amount in balance: ${totalAmount} amount to sell: ${amount} market_position_size: ${signalDetails.market_position_size}`);
+
+                const error = await client.marketSell(signalDetails.symbol, amountToSell).then((info) =>
+                {
+                    //functions.logger.debug(JSON.stringify(info));
+                    return 0;
+                }).catch((error) =>
+                {
+                    const msg = JSON.parse(error.body);
+                    return msg;
+                });
+
+                if (error.code === -2010)
+                {
+                    if (totalAmount !== 0)    // insufficient balance
+                    {
+                        functions.logger.info(`Insufficient balance, trying to sell: ${totalAmount} of ${assetName}`);
+
+                        const sellAllOfThatTokenErrorCode = await client.marketSell(signalDetails.symbol, totalAmount).then((info) =>
+                        {
+                            functions.logger.info(`Done, ${totalAmount} of ${assetName} sold!`);
+                            return 0;
+                        }).catch((error) =>
+                        {
+                            functions.logger.error(JSON.stringify(error));
+                            error.http_status = 500;
+                            error.http_response = 'Error doing marketSell';
+                            throw error;
+                        });
+                    }
+                    else 
+                    {
+                        functions.logger.info(`You have no balance of ${assetName}`);
+                    }
+                }
+                else
+                {
+                    functions.logger.error(JSON.stringify(error));
+                    error.http_status = 500;
+                    error.http_response = 'Error doing marketSell';
+                    throw error;
+                }
             }
             else
             {
